@@ -8,6 +8,9 @@ Recommended to install:
 
 Once installed, download the program from the git repositry and open in pycharm.
 Go to Terminal and type pip install -r requirements.txt
+In Resources/Datalists/PathListReduced change the 2 fields coloured red to your own paths:
+	AudioSegmentPath - Where you installed ffmpeg
+	pythonPath - Where you installed python (or your virtual environment for this project)
 Wait to finish and then run UI_Main_Simplified
 
 On the left hand side are the options for making your pmv.
