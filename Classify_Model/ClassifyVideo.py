@@ -569,7 +569,7 @@ def getVidClassifiedData(inputVideo, vidId="", modelStoragePath="", plotBool=Fal
 #
 # print("Ahhhh")
 
-inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\Sex\Brazzers - Petite sexy blonde Alina Lopez fucked hard during interview.mp4"
+# inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\Sex\Brazzers - Petite sexy blonde Alina Lopez fucked hard during interview.mp4"
 # inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\RandomVideosShe Is Nerdy89\She Is Nerdy - Monroe Fox - princess anal adventure.mp4"
 # # inputVideo2 = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\RandomVideosSpy Fam53\SPYFAM Sex Addict Step Dad Spies On Slutty Step Daughter.mp4"
 # # inputVideo3 = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\Casting\Very beautiful woman enjoys her first casting fuck.mp4"
@@ -581,14 +581,14 @@ inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVi
 # # fileList = os.listdir(fileDir)
 
 
-df_Videos_All = pd.read_csv(r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\DataLists\combinedPornDir.csv")
-# iFile = 0
-# fileList = [inputVideo]
-# while iFile < len(fileList):
-#     file = fileList[iFile]
-file = inputVideo# fileDir + "/" + file
-vidDict = getVidClassifiedData(file, plotBool=True, df_Videos_All=df_Videos_All) #, reImage=True)
-print(vidDict["Sections"])
-# iFile = iFile + 1
+# df_Videos_All = pd.read_csv(r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\DataLists\combinedPornDir.csv")
+# # iFile = 0
+# # fileList = [inputVideo]
+# # while iFile < len(fileList):
+# #     file = fileList[iFile]
+# file = inputVideo# fileDir + "/" + file
+# vidDict = getVidClassifiedData(file, plotBool=True, df_Videos_All=df_Videos_All) #, reImage=True)
+# print(vidDict["Sections"])
+# # iFile = iFile + 1
 
 
