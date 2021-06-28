@@ -61,7 +61,7 @@ Add intro video - Allows you to include a title video for your vid. Change the D
 Start Time - How much to trim off your input videos (the database already includes specific start/end times for most videos that should remove most intros and credits)
 End Time - How much to trim off your input videos (the database already includes specific start/end times for most videos that should remove most intros and credits)
 nSplits - How many sections to split the music into for calculating "switch points" in the song
-SD for clip switch - How many satndard deviations above the mean difference does a change in audio have to be to trigger a "switch point"
+SD for clip switch - How many standard deviations above the mean difference does a change in audio have to be to trigger a "switch point"
 Min clip length - "What is the minimum length of audio needed between each "switch point"
 Randomise - Randomise the order in which videos apppear or keep it in a constant order.
 Resize - Resize videos of different aspect ratios to the same size (Shoiuld be kept on)
