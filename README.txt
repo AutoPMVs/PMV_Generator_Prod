@@ -6,6 +6,9 @@ Required to install:
 Recommended to install:
 	https://nordvpn.com/
 
+Join the subreddit here:
+	https://www.reddit.com/r/AutoPMVs/
+
 Once installed, download the program from the git repositry and open in pycharm.
 Go to Terminal and type pip install -r requirements.txt
 In Resources/Datalists/PathListReduced change the 2 fields coloured red to your own paths:
