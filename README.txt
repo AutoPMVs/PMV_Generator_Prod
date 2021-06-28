@@ -14,6 +14,9 @@ Go to Terminal and type pip install -r requirements.txt
 In Resources/Datalists/PathListReduced change the 2 fields coloured red to your own paths:
 	AudioSegmentPath - Where you installed ffmpeg
 	pythonPath - Where you installed python (or your virtual environment for this project)
+It is then advisable to add your ffmpeg path e.g. - E:\Python Main\ffmpeg\bin to your system path (Windows -> Edit environment variables for your account)
+If you have installed imagemagick then you can do the same for this path to by adding it to the sytem path: E:\Python Main\ImageMagick-7.0.11-Q8
+If you still get a file not found error then restart your pc and try again (windows might need a restart to register the new paths)
 Wait to finish and then run UI_Main_Simplified
 
 On the left hand side are the options for making your pmv.
