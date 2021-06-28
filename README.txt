@@ -76,7 +76,7 @@ It then checks whether a scene has changed between the two frames.
 This information is then passed to the generator so that all normal, foreplay and sex scenes appear together and that you don't have a scene or camera change in the middle of a clip in your pmv.
 It gives the final pmv a much more refeined and professional feel.
 Once a video is classified, the information is stored in a pickle file so you won't have to do it again and it'll be quicker next time.
-There are already some (>1000) info for classified videos stored with the program.
+There are already some (>2500) info for classified videos stored with the program.
 
 
 
