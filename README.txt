@@ -83,8 +83,3 @@ This information is then passed to the generator so that all normal, foreplay an
 It gives the final pmv a much more refeined and professional feel.
 Once a video is classified, the information is stored in a pickle file so you won't have to do it again and it'll be quicker next time.
 There are already some (>2500) info for classified videos stored with the program.
-
-
-
-
-
