@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup, SoupStrainer
 import random
 import youtube_dl
 import pandas as pd
+import cloudscraper
 from Admin_Fns.csvFunctions import title_to_cat
 from Admin_Fns.csvFunctions import catSorting
 from Admin_Fns.csvFunctions import title_to_pornstar
@@ -50,6 +51,8 @@ def groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, 
     psList = sortedLists[1]
     psList = title_to_pornstar(pornstarList, psList, title, uploader)
     psList = [x for x in psList if x != 'Sex']
+    psList = [x for x in psList if x != 'Bo']
+    psList = [x for x in psList if x != 'Pornstar']
     psList = psList + customPornstar
     psList2 = pornstar_sorting(psList, nPornstar)
     catList = remove_PS_Cats(psList, catList)
@@ -309,7 +312,7 @@ def getInfoDict(line):
                 break
             except Exception as e:
                 print(str(e))
-                if "PornHub said: Video has been flagged for verification in accordance with our trust and safety policy" in str(e) or "HTTP Error 410: Gone" in str(e):
+                if "PornHub said:" in str(e) or "HTTP Error 410: Gone" in str(e) or "ERROR: Unable to extract encoded url" in str(e):
                     errorMessage=str(e)
                     info_dict=dict()
                     print("Error - Video Removed")
@@ -330,7 +333,12 @@ def getInfoDict(line):
                 break
             except Exception as e:
                 print(str(e))
-                if "ERROR: requested format not available" == str(e):
+                if "PornHub said:" in str(e) or "HTTP Error 410: Gone" in str(e) or "ERROR: Unable to extract encoded url" in str(e):
+                    errorMessage=str(e)
+                    info_dict=dict()
+                    print("Error - Video Removed")
+                    break
+                elif "ERROR: requested format not available" == str(e):
                     iAttempt = 5
                 pass
         elif iAttempt == 6:
@@ -354,7 +362,7 @@ def getInfoDict(line):
 
 
 
-def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endList=[], knownCatList=[], knownPornstar=[], knownChannel=[], autoAssignStartTimes=True, excludeTags=[], minDuration=0, removeKnown=True, exportData=True):
+def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endList=[], knownCatList=[], knownPornstar=[], knownChannel=[], autoAssignStartTimes=True, excludeTags=[], minDuration=0, removeKnown=True, exportData=True, overwrite=False, knownTitles_List=[]):
     time.sleep(1)
     proxyChannels, pornstarList, includeGroupedChannels, includeGroupedCats, excludeGroupedCats, channelTimings_df, groupChannelTimings_df, searchTitleTags, knownURLs_List = setVidInfoFields()
     if removeKnown:
@@ -419,11 +427,12 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
         except:
             knownChan=knownChannel
 
-        videoList = groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width,
-                   videoList, autoAssignStartTimes=autoAssignStartTimes, startTimeMain=startTimeMain, endTimeMain=endTimeMain, pornstarList=pornstarList, searchTitleTags=searchTitleTags, includeGroupedChannels=includeGroupedChannels,
-                   includeGroupedCats=includeGroupedCats, excludeGroupedCats=excludeGroupedCats, knownCatList=knownCatList[iURL][:], proxyChannels=proxyChannels, channelTimings_df=channelTimings_df,
-                   groupChannelTimings_df=groupChannelTimings_df, startList=startList, endList=endList, iURL=iURL, nCat=nCat, nPornstar=nPornstar,  customPornstar=foundPornstars, excludeTags=excludeTags,
-                    minDuration=minDuration, knownChannel=knownChan, errorMessage=errorMessage)
+        if title not in knownTitles_List:
+            videoList = groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width,
+                       videoList, autoAssignStartTimes=autoAssignStartTimes, startTimeMain=startTimeMain, endTimeMain=endTimeMain, pornstarList=pornstarList, searchTitleTags=searchTitleTags, includeGroupedChannels=includeGroupedChannels,
+                       includeGroupedCats=includeGroupedCats, excludeGroupedCats=excludeGroupedCats, knownCatList=knownCatList[iURL][:], proxyChannels=proxyChannels, channelTimings_df=channelTimings_df,
+                       groupChannelTimings_df=groupChannelTimings_df, startList=startList, endList=endList, iURL=iURL, nCat=nCat, nPornstar=nPornstar,  customPornstar=foundPornstars, excludeTags=excludeTags,
+                        minDuration=minDuration, knownChannel=knownChan, errorMessage=errorMessage)
         # except Exception as e:
         #     ErrorCount = ErrorCount + 1
         #     print('')
@@ -434,26 +443,36 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
 
         if(iURL%breakcsv==0 and iURL>0):
             if len(videoList)>0:
-                exportVideoList(videoList, nCat, nPornstar, iURL, (len(urls)))
+                exportVideoList(videoList, nCat, nPornstar, iURL, (len(urls)), overwrite=overwrite)
             time.sleep(10)
 
         iURL = iURL + 1
 
     print('Total Errors ' + str(ErrorCount))
     if len(videoList) > 0 and exportData:
-        exportVideoList(videoList, nCat, nPornstar, iURL, exportData=exportData)
+        exportVideoList(videoList, nCat, nPornstar, iURL, exportData=exportData, overwrite=overwrite)
     elif exportData==False:
         return exportVideoList(videoList, nCat, nPornstar, iURL, exportData=exportData)
 
 def getMoreCatandChannel(url, categories, uploader, pornstars):
-    source_code = requests.get(url)
-    soup = BeautifulSoup(source_code.content, 'lxml')
+    headers = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"}
+
+    # s = requests.session()
+    # source_code = s.get(url)
+    # soup = BeautifulSoup(source_code.content, "html.parser")
+    # s.cookies.clear()
+
+    scraper = cloudscraper.create_scraper(browser={'browser': 'firefox', 'platform': 'windows'})
+    source_code = scraper.get(url) #headers=headers)
+    soup = BeautifulSoup(source_code.content, 'html.parser')
+
     url_out = ""
     if len(categories)==1 and categories[0]=="":
         categories = []
     appendBool=False
     for link in soup.find_all('a'):
         if 'spankbang.com' in url:
+            # print(str(link))
             if '<a href="/category/' in str(link) or '<a href="/tag/' in str(link):
                 categories.append(str(link.contents[0]))
             if '<a class="ul" href="/profile/' in str(link) and uploader=="":
@@ -519,7 +538,7 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
         url_out = url
     return url_out, categories, uploader, pornstars
 
-def exportVideoList(videoList, nCat=40, nPornstar=5, iURL=0, maxURL=0, exportData=True):
+def exportVideoList(videoList, nCat=40, nPornstar=5, iURL=0, maxURL=0, exportData=True, overwrite=False):
     if iURL==0:
         iURL = len(videoList)
     if maxURL==0:
@@ -541,26 +560,27 @@ def exportVideoList(videoList, nCat=40, nPornstar=5, iURL=0, maxURL=0, exportDat
     dfVideoListOut = pd.DataFrame(videoList, columns=columnList)
 
     if exportData:
-        df_videos = pd.read_csv(PathList["combinedPornListPath"])
-        df_videos = pd.concat([df_videos, dfVideoListOut])
-        iAttempt = 0
-        while iAttempt < 5:
-            try:
-                exportUpdatedFile(df_videos, PathList["combinedPornListPath"])
-                break
-            except:
-                print("File unavailable. Attempt ", iAttempt)
-                time.sleep(10)
-                pass
-            iAttempt = iAttempt + 1
-
-        # dfVideoListOut = dfVideoListOut.fillna('')
-        # dfVideoListOut = dfVideoListOut.replace('nan', '')
-        # dfVideoListOut = dfVideoListOut.replace('0', '')
-        # dfVideoListOut = dfVideoListOut.replace('na', '')
-        # dfVideoListOut = dfVideoListOut.replace(' 0', '')
-        # dfVideoListOut = dfVideoListOut.replace(0, '')
-        # dfVideoListOut.to_csv(PathList["DataListOutPath"] + r"/output" + str(iURL) + '_' + str(maxURL) + '_' + str(time.time()) + ".csv")
+        if overwrite:
+            df_videos = pd.read_csv(PathList["combinedPornListPath"])
+            df_videos = pd.concat([df_videos, dfVideoListOut])
+            iAttempt = 0
+            while iAttempt < 5:
+                try:
+                    exportUpdatedFile(df_videos, PathList["combinedPornListPath"])
+                    break
+                except:
+                    print("File unavailable. Attempt ", iAttempt)
+                    time.sleep(10)
+                    pass
+                iAttempt = iAttempt + 1
+        else:
+            dfVideoListOut = dfVideoListOut.fillna('')
+            dfVideoListOut = dfVideoListOut.replace('nan', '')
+            dfVideoListOut = dfVideoListOut.replace('0', '')
+            dfVideoListOut = dfVideoListOut.replace('na', '')
+            dfVideoListOut = dfVideoListOut.replace(' 0', '')
+            dfVideoListOut = dfVideoListOut.replace(0, '')
+            dfVideoListOut.to_csv(PathList["DataListOutPath"] + r"/output" + str(iURL) + '_' + str(maxURL) + '_' + str(time.time()) + ".csv")
     else:
         return dfVideoListOut
 
@@ -602,6 +622,7 @@ def getValsFromDf(row, nPornstar, nCat):
     return title, id, url, start, end, pornstars, categories, channel, channelGroup, website, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width
 
 def getVidsFromPage(url, excludeTags_List, knownURLs_List=[], brokenLinks=[], df_AutoChannels=pd.DataFrame(), iChannel=0, OldAttemptedURLs=[], useBrokenLinks=False):
+    print(url)
     source_code = requests.get(url)
     soup = BeautifulSoup(source_code.content, 'lxml')
     links = []
@@ -610,8 +631,9 @@ def getVidsFromPage(url, excludeTags_List, knownURLs_List=[], brokenLinks=[], df
     linkBroken = False
     select = False
     for link in soup.find_all('a'):
-        if r'<a class="subTitle" href="/gifs?o=tr">Top Rated Gifs</a>' == str(link) and linkBroken == False:
-            # print(str(link))
+        # print(str(link))
+        # if r'<a class="subTitle" href="/gifs?o=tr">Top Rated Gifs</a>' == str(link) and linkBroken == False:
+        if r'<i class="mr"></i>Most Recent' in str(link) and linkBroken == False:
             select = True
         if r'<a href="/support"> technical support </a>' == str(link):
             linkBrokenCount = linkBrokenCount + 1
@@ -626,6 +648,7 @@ def getVidsFromPage(url, excludeTags_List, knownURLs_List=[], brokenLinks=[], df
                 selected_links.append("https://www.pornhub.com" + str(link.attrs['href']))
         links.append(str(link).replace('http://', 'https://'))
 
+    print("Vids Found:", len(selected_links))
     # selected_links = [url for url in selected_links if url not in OldAttemptedURLs]
     # selected_links = [url for url in selected_links if url not in knownURLs_List]
 
@@ -645,6 +668,8 @@ def exportUpdatedFile(df_videos, fileOut):
     for col in dfVideoListOut.columns:
         if "Pornstar" in col:
             dfVideoListOut[col] = dfVideoListOut[col].replace('Sex', '')
+            dfVideoListOut[col] = dfVideoListOut[col].replace('Bo', '')
+            dfVideoListOut[col] = dfVideoListOut[col].replace('Pornstar', '')
         elif "Unnamed" in col:
             dfVideoListOut.drop(columns=col, inplace=True)
     dfVideoListOut = dfVideoListOut.replace('nan', '')

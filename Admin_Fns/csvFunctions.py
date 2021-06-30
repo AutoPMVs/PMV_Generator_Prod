@@ -157,6 +157,9 @@ def makePornstarList(videoList, publishNewList):
 
     listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'nan']
     listPornstar = [str(ps) for ps in listPornstar if str(ps) != '0']
+    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Sex']
+    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Bo']
+    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Pornstar']
 
     countPornstars['Pornstar'] = countPornstars.index
     outPornstars = countPornstars[['Pornstar', 'Total']]

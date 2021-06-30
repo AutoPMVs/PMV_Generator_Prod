@@ -312,7 +312,7 @@ def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, gr
                 deck = [k for k  in deck if k not in vidRemoveList]
                 iAttempt=0
                 random.shuffle(deck)
-                while deckLast == deck[0] or iAttempt<5:
+                while deckLast == deck[0] and iAttempt<5:
                     random.shuffle(deck)
                     iAttempt = iAttempt + 1
                 deckLast = deck[len(deck)-1]
@@ -567,7 +567,7 @@ def getSectionLengths(sections_list, minSectionLength):
         lengthList.append(totalLength)
     return lengthList
 
-def getVideoData(PMV, df_Videos_All):
+def getVideoData(PMV, df_Videos_All, allVideoDict):
     videosIn = list()
     videoDicts = list()
     iVids = 0
@@ -577,7 +577,7 @@ def getVideoData(PMV, df_Videos_All):
                 if iVids < 120:
                     videosIn.append(f)
                     if PMV.Configuration.UseClassifyModel:
-                        videoDicts.append(getVidClassifiedData(PMV.DirectoryFile_Info.vidDownloadDir + "/" + f, modelStoragePath = PMV.DirectoryFile_Info.ModelStorageDir, df_Videos_All=df_Videos_All))
+                        videoDicts.append(getVidClassifiedData(PMV.DirectoryFile_Info.vidDownloadDir + "/" + f, allVideoDict, modelStoragePath = PMV.DirectoryFile_Info.ModelStorageDir, df_Videos_All=df_Videos_All))
 
                 iVids = iVids + 1
 

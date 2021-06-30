@@ -8,6 +8,7 @@ from threading import Thread
 from pydub import AudioSegment
 from PMV_Fns.url_Web_PMV_Fn import genPMVs
 from PMV_Fns.selectFunctions import filterForSelection
+from PMV_Fns.selectFunctions import downloadVids
 from Admin_Fns.allPaths import PathList
 # from PMV_Fns.PMV_Class_Setup import PMV_Class
 from PMV_Fns.PMV_Class_Setup import URL_Data
@@ -15,8 +16,9 @@ from PMV_Fns.PMV_Class_Setup import Video_Select
 from PMV_Fns.PMV_Class_Setup import Configuration
 from PMV_Fns.PMV_Class_Setup import DirectoryFile_Info
 from PMV_Fns.PMV_Class_Setup import Music_Info
-from PMV_Fns.PMV_Class_Setup import SectionClass
-from Classify_Model.ClassifyVideo import ImageClass
+from Classify_Model.ClassifyVideo import loadClassifyPickleFile
+# from PMV_Fns.PMV_Class_Setup import SectionClass
+# from Classify_Model.ClassifyVideo import ImageClass
 
 from Admin_Fns.UI_ProfileManager import loadDefaultProfile
 from Admin_Fns.UI_ProfileManager import removeProfile
@@ -24,7 +26,7 @@ from Admin_Fns.UI_ProfileManager import addNewProfile
 from Admin_Fns.UI_ProfileManager import loadProfile
 
 ###### Optional ######
-from Admin_Fns.addNewVideos import getVidInfo
+from Admin_Fns.getVideoInfoFn import getVidInfoFn
 ######################
 
 
@@ -51,18 +53,43 @@ class PMV_Class(Thread):
         Thread.__init__(self)
         self.start()
 
+    def run(self):
+        """Run Worker Thread."""
+        # This is the code executing in the new thread.
+        getVidInfoFn(self.URL_Data.videoURLs, self.Configuration.startTime, self.Configuration.subtractEnd, overwrite=True)
+        genPMVs(self, sampleHeight, sampleWidth, df_Video_Data[0])
+
+
+class Download_Class(Thread):
+    def __init__(self, urls, downloadPath):
+        self.urls = urls
+        self.downloadPath = downloadPath
+
+        Thread.__init__(self)
+        self.start()
 
     def run(self):
         """Run Worker Thread."""
         # This is the code executing in the new thread.
+        downloadVids(self.urls, self.downloadPath)
 
-        ###### Optional ######
-        # try:
-        getVidInfo(self)
-        # except:
-        #     pass
-        ######################
-        genPMVs(self, sampleHeight, sampleWidth, df_Video_Data[0])
+
+class GetData_Class(Thread):
+    def __init__(self, DirectoryFile_Info, Configuration, Video_Select, URL_Data, Music_Info):
+        self.DirectoryFile_Info = DirectoryFile_Info
+        self.Configuration = Configuration
+        self.Music_Info = Music_Info
+        self.Video_Select = Video_Select
+        self.URL_Data = URL_Data
+
+        Thread.__init__(self)
+        self.start()
+
+    def run(self):
+        """Run Worker Thread."""
+        # This is the code executing in the new thread.
+        getVidInfoFn(self.URL_Data.videoURLs, self.Configuration.startTime, self.Configuration.subtractEnd, overwrite=True)
+
 
 pythonDir = PathList["pythonPath"] ########## Put your python.exe directory here - e.g. C:/User/.../python.exe ###############
 dot = "."
@@ -71,7 +98,7 @@ iProject = 0
 
 class MyFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, -1, title='PMV Editor (Public Release) v1.1', pos=wx.DefaultPosition)#, size=(900, 800))
+        super().__init__(None, -1, title='PMV Editor (Public Release) v1.2', pos=wx.DefaultPosition)#, size=(900, 800))
         self.Maximize(False)
         self.Maximize(True)
         self.panel = wx.Panel(self)
@@ -101,6 +128,8 @@ class MyFrame(wx.Frame):
         self.customOutputDir = profileOptions["defaultNewPMVsPath"]
         self.introVidName = profileOptions["introVideoPath"]
         self.username = profileOptions["Username"] #'AutoPMVs' ########## Change this to own username if desired ##########
+        self.modelStoragePath = PathList["defaultModelStoragePath"]
+        self.allVideoDict = loadClassifyPickleFile(self.modelStoragePath)
         self.musicName = ""
         self.musicArtist = ""
         self.musicFilePath = ""
@@ -306,6 +335,15 @@ class MyFrame(wx.Frame):
         self.orPornstars.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
         self.sizerOrPornstarsBool.Add(self.orPornstars, 1, wx.ALL | wx.EXPAND, spacing)
         self.mainSizerOptions.Add(self.sizerOrPornstarsBool, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerClassifiedOnlyBool = wx.BoxSizer(wx.HORIZONTAL)
+        self.classifiedOnlyLabel = wx.StaticText(self.panel, -1, 'Use Only Classified Vids:')
+        self.sizerClassifiedOnlyBool.Add(self.classifiedOnlyLabel, 1, wx.ALL, spacing)
+        self.classifiedOnly = wx.CheckBox(self.panel)
+        self.classifiedOnly.SetValue(profileOptions["Only Classified"])
+        self.classifiedOnly.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
+        self.sizerClassifiedOnlyBool.Add(self.classifiedOnly, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerOptions.Add(self.sizerClassifiedOnlyBool, 0, wx.ALL | wx.EXPAND, spacing)
 
         self.sizerNVidsSelect = wx.BoxSizer(wx.HORIZONTAL)
         self.nVidsLabel = wx.StaticText(self.panel, -1, 'Select Vids Number:')
@@ -605,9 +643,20 @@ class MyFrame(wx.Frame):
         ## Button
         #####################
 
-        self.runButton = wx.Button(self.panel, label='Start')
+        self.sizerButtons = wx.BoxSizer(wx.HORIZONTAL)
+        self.saveDataButton = wx.Button(self.panel, label='Save Data')
+        self.saveDataButton.Bind(wx.EVT_BUTTON, self.onGetData)
+        self.sizerButtons.Add(self.saveDataButton, 0, wx.ALL | wx.CENTER, spacing)
+
+        self.downloadButton = wx.Button(self.panel, label='Download')
+        self.downloadButton.Bind(wx.EVT_BUTTON, self.onDownload)
+        self.sizerButtons.Add(self.downloadButton, 0, wx.ALL | wx.CENTER, spacing)
+
+        self.runButton = wx.Button(self.panel, label='Make PMV')
         self.runButton.Bind(wx.EVT_BUTTON, self.onMakePMV)
-        self.mainSizerSelections.Add(self.runButton, 0, wx.ALL | wx.CENTER, spacing)
+        self.sizerButtons.Add(self.runButton, 0, wx.ALL | wx.CENTER, spacing)
+
+        self.mainSizerSelections.Add(self.sizerButtons, 0, wx.ALL | wx.CENTER, spacing)
 
         ######################
         ## Log Display
@@ -662,6 +711,7 @@ class MyFrame(wx.Frame):
         self.sizerVidSetLengthBtn.ShowItems(show=OnOff)
         self.sizerOrCategoriesBool.ShowItems(show=OnOff)
         self.sizerOrPornstarsBool.ShowItems(show=OnOff)
+        self.sizerClassifiedOnlyBool.ShowItems(show=OnOff)
 
         self.sizerOutputVid.ShowItems(show=OnOff)
         self.sizerOutputVidFrac.ShowItems(show=OnOff)
@@ -719,6 +769,7 @@ class MyFrame(wx.Frame):
         self.occuranceSlider.SetValue(profileOptions["Music Vid Occurance Factor"])
         self.orCategories.SetValue(profileOptions["Or Category"])
         self.orPornstars.SetValue(profileOptions["Or Pornstar"])
+        self.classifiedOnly.SetValue(profileOptions["Only Classified"])
         self.nVidsSlider.SetValue(profileOptions["Select Vids N"])
         self.vidLengthMin.ChangeValue(profileOptions["Min Vid Length"])
         self.vidLengthMax.ChangeValue(profileOptions["Max Vid Length"])
@@ -751,6 +802,7 @@ class MyFrame(wx.Frame):
         profileOptions["Music Vid Occurance Factor"] = self.occuranceSlider.GetValue()
         profileOptions["Or Category"] = self.orCategories.GetValue()
         profileOptions["Or Pornstar"] = self.orPornstars.GetValue()
+        profileOptions["Only Classified"] = self.classifiedOnly.GetValue()
         profileOptions["Select Vids N"] = self.nVidsSlider.GetValue()
         profileOptions["Min Vid Length"] = self.vidLengthMin.GetValue()
         profileOptions["Max Vid Length"] = self.vidLengthMax.GetValue()
@@ -872,7 +924,7 @@ class MyFrame(wx.Frame):
     def onAddURLs(self, event):
         newURLS = filterForSelection(self.videoList, self.includeCategories, self.includePornstars, self.includeChannels, self.excludeCategories, self.excludePornstars,
                            self.excludeChannels,  self.orCategories.GetValue(), self.orPornstars.GetValue(), int(self.nVidsSlider.GetValue()),
-                           self.minVidLength * 60, self.maxVidLength * 60)
+                           self.minVidLength * 60, self.maxVidLength * 60, returnDataframe=False, classifiedOnly=self.classifiedOnly.GetValue(), allVideoDict = self.allVideoDict)
         
         self.ImportedURLs = self.ImportedURLs + newURLS
         self.ImportedURLs = list(dict.fromkeys(self.ImportedURLs))
@@ -888,7 +940,7 @@ class MyFrame(wx.Frame):
         df_videoList = filterForSelection(self.videoList, self.includeCategories, self.includePornstars,
                                           self.includeChannels, self.excludeCategories, self.excludePornstars,
                                           self.excludeChannels,  self.orCategories.GetValue(), self.orPornstars.GetValue(), int(self.nVidsSlider.GetValue()),
-                                          self.minVidLength * 60, self.maxVidLength * 60, returnDataframe=True)
+                                          self.minVidLength * 60, self.maxVidLength * 60, returnDataframe=True, classifiedOnly=self.classifiedOnly.GetValue(), allVideoDict = self.allVideoDict)
 
         self.videoListFiltered = df_videoList
 
@@ -1041,70 +1093,6 @@ class MyFrame(wx.Frame):
         self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
         self.changeTitleName()
 
-    def changeVideoListIncludeCategories(self, event):
-        videoList = self.videoList
-        includeCategories = self.includeCategories
-        self.orCategoriesBool = self.orCategories.GetValue()
-        if len(includeCategories) > 0:
-            if self.orCategoriesBool == True:
-                videoList = videoList.loc[(videoList['_Cat1'].isin(includeCategories)) | (videoList['_Cat2'].isin(includeCategories)) | (videoList['_Cat3'].isin(includeCategories)) | (videoList['_Cat4'].isin(includeCategories)) | (videoList['_Cat5'].isin(includeCategories)) | (videoList['_Cat6'].isin(includeCategories)) | (videoList['_Cat7'].isin(includeCategories)) | (videoList['_Cat8'].isin(includeCategories)) | (videoList['_Cat9'].isin(includeCategories)) | (videoList['_Cat10'].isin(includeCategories)) | (videoList['_Cat11'].isin(includeCategories)) | (videoList['_Cat12'].isin(includeCategories)) | (videoList['_Cat13'].isin(includeCategories)) | (videoList['_Cat14'].isin(includeCategories)) | (videoList['_Cat15'].isin(includeCategories)) | (videoList['_Cat16'].isin(includeCategories)) | (videoList['_Cat17'].isin(includeCategories)) | (videoList['_Cat18'].isin(includeCategories)) | (videoList['_Cat19'].isin(includeCategories)) | (videoList['_Cat20'].isin(includeCategories)) | (
-                    videoList['_Cat21'].isin(includeCategories)) | (videoList['_Cat22'].isin(includeCategories)) | (videoList['_Cat23'].isin(includeCategories)) | (videoList['_Cat24'].isin(includeCategories)) | (videoList['_Cat25'].isin(includeCategories)) | (videoList['_Cat26'].isin(includeCategories)) | (videoList['_Cat27'].isin(includeCategories)) | (videoList['_Cat28'].isin(includeCategories)) | (videoList['_Cat29'].isin(includeCategories)) | (videoList['_Cat30'].isin(includeCategories)) | (videoList['_Cat31'].isin(includeCategories)) | (videoList['_Cat32'].isin(includeCategories)) | (videoList['_Cat33'].isin(includeCategories)) | (videoList['_Cat34'].isin(includeCategories)) | (videoList['_Cat35'].isin(includeCategories)) | (videoList['_Cat36'].isin(includeCategories)) | (videoList['_Cat37'].isin(includeCategories)) | (videoList['_Cat38'].isin(includeCategories)) | (videoList['_Cat39'].isin(includeCategories)) | (videoList['_Cat40'].isin(includeCategories))]
-            else:
-                for cat in includeCategories:
-                    videoList = videoList.loc[
-                        (videoList['_Cat1'].isin([cat])) | (videoList['_Cat2'].isin([cat])) | (videoList['_Cat3'].isin([cat])) | (videoList['_Cat4'].isin([cat])) | (videoList['_Cat5'].isin([cat])) | (videoList['_Cat6'].isin([cat])) | (videoList['_Cat7'].isin([cat])) | (videoList['_Cat8'].isin([cat])) | (videoList['_Cat9'].isin([cat])) | (videoList['_Cat10'].isin([cat])) | (videoList['_Cat11'].isin([cat])) | (videoList['_Cat12'].isin([cat])) | (videoList['_Cat13'].isin([cat])) | (videoList['_Cat14'].isin([cat])) | (videoList['_Cat15'].isin([cat])) | (videoList['_Cat16'].isin([cat])) | (videoList['_Cat17'].isin([cat])) | (videoList['_Cat18'].isin([cat])) | (videoList['_Cat19'].isin([cat])) | (videoList['_Cat20'].isin([cat])) | (videoList['_Cat21'].isin([cat])) | (videoList['_Cat22'].isin([cat])) | (videoList['_Cat23'].isin([cat])) | (videoList['_Cat24'].isin([cat])) | (videoList['_Cat25'].isin([cat])) | (videoList['_Cat26'].isin([cat])) | (videoList['_Cat27'].isin([cat])) | (
-                            videoList['_Cat28'].isin([cat])) | (videoList['_Cat29'].isin([cat])) | (videoList['_Cat30'].isin([cat])) | (videoList['_Cat31'].isin([cat])) | (videoList['_Cat32'].isin([cat])) | (videoList['_Cat33'].isin([cat])) | (videoList['_Cat34'].isin([cat])) | (videoList['_Cat35'].isin([cat])) | (videoList['_Cat36'].isin([cat])) | (videoList['_Cat37'].isin([cat])) | (videoList['_Cat38'].isin([cat])) | (videoList['_Cat39'].isin([cat])) | (videoList['_Cat40'].isin([cat]))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
-    def changeVideoListIncludePornstars(self, event):
-        videoList = self.videoList
-        includePornstars = self.includePornstars
-        self.orPornstarsBool = self.orPornstars.GetValue()
-        if len(includePornstars) > 0:
-            if self.orPornstarsBool == True:
-                videoList = videoList.loc[(videoList['_Pornstar1'].isin(includePornstars)) | (videoList['_Pornstar2'].isin(includePornstars)) | (videoList['_Pornstar3'].isin(includePornstars)) | (videoList['_Pornstar4'].isin(includePornstars)) | (videoList['_Pornstar5'].isin(includePornstars))]
-            else:
-                for pornstar in includePornstars:
-                    videoList = videoList.loc[(videoList['_Pornstar1'].isin([pornstar])) | (videoList['_Pornstar2'].isin([pornstar])) | (videoList['_Pornstar3'].isin([pornstar])) | (videoList['_Pornstar4'].isin([pornstar])) | (videoList['_Pornstar5'].isin([pornstar]))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
-    def changeVideoListIncludeChannles(self, event):
-        videoList = self.videoList
-        includeChannels = self.includeChannels
-        if len(includeChannels) > 0:
-            videoList = videoList.loc[(videoList['_Channel'].isin(includeChannels))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
-    def changeVideoListExcludeCategories(self, event):
-        videoList = self.videoList
-        excludeCategories = self.excludeCategories
-        if len(excludeCategories) > 0:
-            videoList = videoList.loc[
-                (~videoList['_Cat1'].isin(excludeCategories)) & (~videoList['_Cat2'].isin(excludeCategories)) & (~videoList['_Cat3'].isin(excludeCategories)) & (~videoList['_Cat4'].isin(excludeCategories)) & (~videoList['_Cat5'].isin(excludeCategories)) & (~videoList['_Cat6'].isin(excludeCategories)) & (~videoList['_Cat7'].isin(excludeCategories)) & (~videoList['_Cat8'].isin(excludeCategories)) & (~videoList['_Cat9'].isin(excludeCategories)) & (~videoList['_Cat10'].isin(excludeCategories)) & (~videoList['_Cat11'].isin(excludeCategories)) & (~videoList['_Cat12'].isin(excludeCategories)) & (~videoList['_Cat13'].isin(excludeCategories)) & (~videoList['_Cat14'].isin(excludeCategories)) & (~videoList['_Cat15'].isin(excludeCategories)) & (~videoList['_Cat16'].isin(excludeCategories)) & (~videoList['_Cat17'].isin(excludeCategories)) & (~videoList['_Cat18'].isin(excludeCategories)) & (~videoList['_Cat19'].isin(excludeCategories)) & (~videoList['_Cat20'].isin(excludeCategories)) & (
-                    ~videoList['_Cat21'].isin(excludeCategories)) & (~videoList['_Cat22'].isin(excludeCategories)) & (~videoList['_Cat23'].isin(excludeCategories)) & (~videoList['_Cat24'].isin(excludeCategories)) & (~videoList['_Cat25'].isin(excludeCategories)) & (~videoList['_Cat26'].isin(excludeCategories)) & (~videoList['_Cat27'].isin(excludeCategories)) & (~videoList['_Cat28'].isin(excludeCategories)) & (~videoList['_Cat29'].isin(excludeCategories)) & (~videoList['_Cat30'].isin(excludeCategories)) & (~videoList['_Cat31'].isin(excludeCategories)) & (~videoList['_Cat32'].isin(excludeCategories)) & (~videoList['_Cat33'].isin(excludeCategories)) & (~videoList['_Cat34'].isin(excludeCategories)) & (~videoList['_Cat35'].isin(excludeCategories)) & (~videoList['_Cat36'].isin(excludeCategories)) & (~videoList['_Cat37'].isin(excludeCategories)) & (~videoList['_Cat38'].isin(excludeCategories)) & (~videoList['_Cat39'].isin(excludeCategories)) & (~videoList['_Cat40'].isin(excludeCategories))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
-    def changeVideoListExcludePornstars(self, event):
-        videoList = self.videoList
-        excludePornstars = self.excludePornstars
-        print(excludePornstars)
-        if len(excludePornstars) > 0:
-            videoList = videoList.loc[(~videoList['_Pornstar1'].isin(excludePornstars)) & (~videoList['_Pornstar2'].isin(excludePornstars)) & (~videoList['_Pornstar3'].isin(excludePornstars)) & (~videoList['_Pornstar4'].isin(excludePornstars)) & (~videoList['_Pornstar5'].isin(excludePornstars))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
-    def changeVideoListExcludeChannels(self, event):
-        videoList = self.videoList
-        excludeChannels = self.excludeChannels
-        if len(excludeChannels) > 0:
-            videoList = videoList.loc[(~videoList['_Channel'].isin(excludeChannels))]
-        self.videoList = videoList
-        self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
-
     def changeVideoList(self, event):
         self.videoList = self.videoListOriginal
         # self.videoList = self.videoList[self.videoList['Duration'] < self.maxVidLength * 60]
@@ -1116,7 +1104,7 @@ class MyFrame(wx.Frame):
         videoList = filterForSelection(self.videoList, includeCategories=self.includeCategories, includePornstars=self.includePornstars,
                            includeChannels=self.includeChannels, excludeCategories=self.excludeCategories, excludePornstars=self.excludePornstars,
                            excludeChannels=self.excludeChannels, orCategories=self.orCategories.GetValue(), orPornstars=self.orPornstars.GetValue(),
-                           minDuration=self.minVidLength * 60, maxDuration=self.maxVidLength * 60, returnDataframe=True)
+                           minDuration=self.minVidLength * 60, maxDuration=self.maxVidLength * 60, returnDataframe=True, classifiedOnly=self.classifiedOnly.GetValue(), allVideoDict = self.allVideoDict)
 
         self.videoList = videoList
         self.vidsAvailableNumber.SetLabel(str(self.videoList.shape[0]))
@@ -1166,7 +1154,7 @@ class MyFrame(wx.Frame):
                                                                          musicVidDir=self.customMusicVidDir,
                                                                          finalVidDir=self.customOutputDir,
                                                                          musicFilePath=self.musicFilePath,
-                                                                         ModelStorageDir=PathList["defaultModelStoragePath"]),
+                                                                         ModelStorageDir=self.modelStoragePath),
                          Configuration=Configuration(startEndTime=[self.startTrim.GetValue(), self.endTrim.GetValue()],
                                                      sd_scale=self.sdSlider.GetValue(),
                                                      nSplits=int(self.nSplitsSlider.GetValue()),
@@ -1196,6 +1184,54 @@ class MyFrame(wx.Frame):
 
 
         self.logger.ChangeValue("Making PMV! " + self.PMV_Final.DirectoryFile_Info.finalVidName + ". Check terminal for progress.")
+
+    def onGetData(self, event):
+        self.logger.ChangeValue("Getting new data for vids and adding to database, please wait...")
+
+        df_Video_Data[0] = self.videoListOriginal
+
+        videoURL_List = self.videURLselect.GetValue().split('\n')
+
+        GetData_Class(DirectoryFile_Info=DirectoryFile_Info(finalVidName = self.outputFileName.GetValue(),
+                                                            vidDownloadDir=self.customVidDir + "/",
+                                                            pythonDir=PathList["pythonPath"],
+                                                            introVidDir=self.introVidName,
+                                                            musicDir=self.customMusicDir,
+                                                            musicVidDir=self.customMusicVidDir,
+                                                            finalVidDir=self.customOutputDir,
+                                                            musicFilePath=self.musicFilePath,
+                                                            ModelStorageDir=self.modelStoragePath),
+                     Configuration=Configuration(startEndTime=[self.startTrim.GetValue(), self.endTrim.GetValue()],
+                                                 sd_scale=self.sdSlider.GetValue(),
+                                                 nSplits=int(self.nSplitsSlider.GetValue()),
+                                                 randomise=self.randomiseCB.GetValue(),
+                                                 granularity=self.granularitySlider.GetValue(),
+                                                 min_length=self.minClipLengthSlider.GetValue(),
+                                                 videoNumber=0,
+                                                 minVidLength=self.vidLengthMin.GetValue()*60,
+                                                 maxVidLength=self.vidLengthMax.GetValue()*60,
+                                                 cropVidFraction=self.outputVidCropFracSlider.GetValue(),
+                                                 cropVidBool=self.outputVidCrop.GetValue(),
+                                                 resize=self.resizeCB.GetValue(),
+                                                 flipBool=False,
+                                                 addIntro=self.addIntroBool.GetValue(),
+                                                 userName=self.userNameName.GetValue(),
+                                                 UseClassifyModel=self.useClassifierBool.GetValue()),
+                     Video_Select=None,
+                     URL_Data=URL_Data(videoURLs=videoURL_List,
+                                       musicURL=self.musicURLselect.GetValue()),
+                     Music_Info=Music_Info(musicName=self.musicName,
+                                           musicType='mp3',
+                                           songStart=self.musicFileStart.GetValue(),
+                                           songEnd=self.musicFileEnd.GetValue(),
+                                           musicVideoBool=self.musicVidFileBool.GetValue(),
+                                           musicVideoOccuranceFactor=self.occuranceSlider.GetValue(),
+                                           trimSong=self.musicFileTrim.GetValue()))
+
+    def onDownload(self, event):
+        self.logger.ChangeValue("Downloading the selected vids, please wait...")
+        videoURL_List = self.videURLselect.GetValue().split('\n')
+        Download_Class(urls=videoURL_List, downloadPath=self.customVidDir + "/")
 
 if __name__ == '__main__':
     app = wx.App()

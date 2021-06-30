@@ -11,10 +11,12 @@ import pandas as pd
 import subprocess
 from Admin_Fns.allPaths import PathList
 from PMV_Fns.processMusicFile import inputMusic
-from PMV_Fns.selectFunctions import getCustom
+from PMV_Fns.selectFunctions import filterForSelection
+from PMV_Fns.selectFunctions import downloadVids
 from PMV_Fns.selectFunctions import getMusic
 from PMV_Fns.selectFunctions import getMusicFromURL
 import os
+from Classify_Model.ClassifyVideo import loadClassifyPickleFile
 from Admin_Fns.getVideoInfoFn import exportUpdatedFile
 from Admin_Fns.getVideoInfoFn import updateDF
 
@@ -47,30 +49,29 @@ def genPMVs(PMV, sampleHeight, sampleWidth, df_Video_Data):
 
     PMV.Music_Info.musicName = musicFileName
 
-    if len(PMV.URL_Data.videoURLs) > 0:
-        for vid in PMV.URL_Data.videoURLs:
-            print(vid)
-            df_videos = pd.read_csv(PathList["combinedPornListPath"])
-            df_videos = updateDF(df_videos, vid)
-            iAttempt = 0
-            while iAttempt<5:
-                try:
-                    exportUpdatedFile(df_videos, PathList["combinedPornListPath"])
-                    break
-                except:
-                    print("File unavailable. Attempt ", iAttempt)
-                    time.sleep(10)
-                    pass
-                iAttempt = iAttempt +1
-            subprocess.call([PMV.DirectoryFile_Info.pythonDir, PathList["downloadVidPath"], PMV.DirectoryFile_Info.vidDownloadDir, vid])
-        df_videos_filtered = df_Video_Data
+    if PMV.Configuration.UseClassifyModel:
+        allVideoDict = loadClassifyPickleFile(PMV.DirectoryFile_Info.ModelStorageDir)
     else:
-        df_videos_filtered = getCustom(df_Video_Data, includeCategories=PMV.Video_Select.includeCategories, includePornstars=PMV.Video_Select.includePornstars,
-                                       includeChannels=PMV.Video_Select.includeChannels, excludeCategories=PMV.Video_Select.excludeCategories,
-                                       excludePornstars=PMV.Video_Select.excludePornstars, excludeChannels=PMV.Video_Select.excludeChannels,
-                                       orCategories=PMV.Video_Select.orCategories, orPornstars=PMV.Video_Select.orPornstars,
-                                       outputDir=PMV.DirectoryFile_Info.vidDownloadDir, number=PMV.Configuration.videoNumber,
-                                       maxDuration=PMV.Configuration.maxVidLength, minDuration=PMV.Configuration.minVidLength)
+        allVideoDict = dict()
+
+    if len(PMV.URL_Data.videoURLs) > 0:
+        downloadVids(PMV.URL_Data.videoURLs, outputDir=PMV.DirectoryFile_Info.vidDownloadDir)
+    else:
+        selectedVidUrls = filterForSelection(df_Video_Data, includeCategories=PMV.Video_Select.includeCategories, includePornstars=PMV.Video_Select.includePornstars,
+                                             includeChannels=PMV.Video_Select.includeChannels, excludeCategories=PMV.Video_Select.excludeCategories,
+                                             excludePornstars=PMV.Video_Select.excludePornstars, excludeChannels=PMV.Video_Select.excludeChannels,
+                                             orCategories=PMV.Video_Select.orCategories, orPornstars=PMV.Video_Select.orPornstars,
+                                             number=PMV.Configuration.videoNumber, maxDuration=PMV.Configuration.maxVidLength,
+                                             minDuration=PMV.Configuration.minVidLength, returnDataframe = False,
+                                             classifiedOnly=PMV.Video_Select.classifiedOnly, allVideoDict=allVideoDict)
+        downloadVids(selectedVidUrls, outputDir=PMV.DirectoryFile_Info.vidDownloadDir)
+
+        # df_videos_filtered = getCustom(df_Video_Data, includeCategories=PMV.Video_Select.includeCategories, includePornstars=PMV.Video_Select.includePornstars,
+        #                                includeChannels=PMV.Video_Select.includeChannels, excludeCategories=PMV.Video_Select.excludeCategories,
+        #                                excludePornstars=PMV.Video_Select.excludePornstars, excludeChannels=PMV.Video_Select.excludeChannels,
+        #                                orCategories=PMV.Video_Select.orCategories, orPornstars=PMV.Video_Select.orPornstars,
+        #                                outputDir=PMV.DirectoryFile_Info.vidDownloadDir, number=PMV.Configuration.videoNumber,
+        #                                maxDuration=PMV.Configuration.maxVidLength, minDuration=PMV.Configuration.minVidLength)
 
 
     print(AudioSegment.ffmpeg)
@@ -91,15 +92,6 @@ def genPMVs(PMV, sampleHeight, sampleWidth, df_Video_Data):
     mp3_dir = mp3_dir.replace('"', "'")
     mp3_dir = mp3_dir.replace('||', "_")
 
-    # df_Music_Data = pd.read_csv(PathList["combinedMusicListPath"])
-    # if PMV.musicURL in df_Music_Data["url"].to_list():
-    #     selectedMusicData = df_Music_Data[df_Music_Data["url"]==PMV.musicURL]
-    #     if selectedMusicData["Start"].values[0] != 0 or selectedMusicData["End"].values[0] != 0:
-    #         PMV.trimSong = True
-    #         PMV.songStart = selectedMusicData["Start"].values[0]
-    #         sound = AudioSegment.from_file(mp3_dir, 'mp4')
-    #         PMV.songEnd = int(sound.duration_seconds - selectedMusicData["End"].values[0])
-
     reshaped_data, first_data, audioclip, ratio, bitrate, songStart, songEnd, songSections = inputMusic(mp3_dir, trimSong=PMV.Music_Info.trimSong, songStart=PMV.Music_Info.songStart, songEnd=PMV.Music_Info.songEnd, granularity=PMV.Configuration.granularity)
     PMV.Music_Info.songStart = songStart
     PMV.Music_Info.songEnd = songEnd
@@ -109,8 +101,8 @@ def genPMVs(PMV, sampleHeight, sampleWidth, df_Video_Data):
     print('List of Indices of maximum element :', len(result))
     result.append(len(first_data) / ratio)
 
-    videoData, origVidName, videoDicts = getVideoData(PMV, df_videos_filtered)
-    videos, videoData = processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_videos_filtered) #, PMV.Music_Info.musicVideoBool, selectedVids, PMV.Configuration.startTime, PMV.Configuration.subtractEnd)
+    videoData, origVidName, videoDicts = getVideoData(PMV, df_Video_Data, allVideoDict)
+    videos, videoData = processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_Video_Data) #, PMV.Music_Info.musicVideoBool, selectedVids, PMV.Configuration.startTime, PMV.Configuration.subtractEnd)
     if PMV.Configuration.UseClassifyModel:
         clips = videoSplitsUseClassifyModel(result, videos, videoData, songSections,
                                             PMV.Configuration.granularity, PMV.Configuration.randomise, origVidName, videoDicts)

@@ -11,5 +11,5 @@ def getVidInfo(PMV):
     startTimeMain = PMV.Configuration.startTime
     endTimeMain = PMV.Configuration.subtractEnd
 
-    getVidInfoFn(urls, startTimeMain, endTimeMain)
+    getVidInfoFn(urls, startTimeMain, endTimeMain, overwrite=True)
 

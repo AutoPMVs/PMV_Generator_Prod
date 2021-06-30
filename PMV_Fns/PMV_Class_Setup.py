@@ -62,7 +62,7 @@ class Configuration:
 class Video_Select:
     def __init__(self, includeChannels, includeCategories, includePornstars, excludeCategories,
                  excludePornstars, excludeChannels, includeSelectNumber, excludeSelectNumber,
-                 orCategories, orPornstars):
+                 orCategories, orPornstars, classifiedOnly):
         self.includeChannels = includeChannels
         self.includeCategories = includeCategories
         self.includePornstars = includePornstars
@@ -73,3 +73,4 @@ class Video_Select:
         self.excludeSelectNumber = excludeSelectNumber
         self.orCategories =orCategories
         self.orPornstars = orPornstars
+        self.classifiedOnly = classifiedOnly
