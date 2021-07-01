@@ -9,16 +9,25 @@ Recommended to install:
 Join the subreddit here:
 	https://www.reddit.com/r/AutoPMVs/
 
-Once installed, download the program from the git repositry and open in pycharm.
-Go to Terminal and type pip install -r requirements.txt
+//////////////////////// Installation ////////////////////////
+Install all of the above listed programs
+Before doing anything else you need to add some directories to your environment path variables (Windows -> Edit environment variables for your account):
+	Python Scripts Folder - C:\...\Python\Scripts\
+	Python exe Folder - C:\...\Python\
+	Your ffmpeg path - C:\...\ffmpeg\bin
+	Image Magick path - c:\...\ImageMagick-7.0.11-Q8
+Version numbers, drive letters and paths may vary slightly.
+Once this is done restart the pc to register the changes.
+
+Once the restart is complete, download the program from the git repositry and open in pycharm.
+Now, go to Terminal (in pycharm) and type pip install -r requirements.txt
 In Resources/Datalists/PathListReduced change the 2 fields coloured red to your own paths:
 	AudioSegmentPath - Where you installed ffmpeg
 	pythonPath - Where you installed python (or your virtual environment for this project)
-It is then advisable to add your ffmpeg path e.g. - E:\Python Main\ffmpeg\bin to your system path (Windows -> Edit environment variables for your account)
-If you have installed imagemagick then you can do the same for this path to by adding it to the sytem path: E:\Python Main\ImageMagick-7.0.11-Q8
 If you still get a file not found error then restart your pc and try again (windows might need a restart to register the new paths)
 Then run UI_Main_Simplified and make PMVs!
 
+//////////////////////// Overview ////////////////////////
 On the left hand side are the options for making your pmv.
 On the right hand side is a series of options to download videos and music for your pmv. 
 If you already have videos you want to use then you can use that rather than the downloader.
