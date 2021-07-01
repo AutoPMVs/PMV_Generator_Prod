@@ -370,10 +370,11 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
 
     dataframeFrames = pd.concat(df_SectionsList)
 
-    if len(SectionsDict["finish"])>1 and SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]<5:
-        SectionsDict["finish"] = SectionsDict["finish"][:-1]
-    elif SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]>=3:
-        SectionsDict["finish"][-1] = [SectionsDict["finish"][-1][0], SectionsDict["finish"][-1][1]-1]
+    if len(SectionsDict["finish"])>1:
+        if len(SectionsDict["finish"])>1 and SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]<5:
+            SectionsDict["finish"] = SectionsDict["finish"][:-1]
+        elif SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]>=3:
+            SectionsDict["finish"][-1] = [SectionsDict["finish"][-1][0], SectionsDict["finish"][-1][1]-1]
 
     return dataframeFrames, SectionsDict, StartEndTimes
 
