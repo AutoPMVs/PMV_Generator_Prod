@@ -17,7 +17,7 @@ In Resources/Datalists/PathListReduced change the 2 fields coloured red to your 
 It is then advisable to add your ffmpeg path e.g. - E:\Python Main\ffmpeg\bin to your system path (Windows -> Edit environment variables for your account)
 If you have installed imagemagick then you can do the same for this path to by adding it to the sytem path: E:\Python Main\ImageMagick-7.0.11-Q8
 If you still get a file not found error then restart your pc and try again (windows might need a restart to register the new paths)
-Wait to finish and then run UI_Main_Simplified
+Then run UI_Main_Simplified and make PMVs!
 
 On the left hand side are the options for making your pmv.
 On the right hand side is a series of options to download videos and music for your pmv. 
