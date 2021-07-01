@@ -1,4 +1,5 @@
 # import pickle
+import shutil
 import _pickle as pickle
 import time
 import datetime
@@ -339,7 +340,7 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
     df_SectionsList=[]
     for iSection in sections_n_list:
         df_section = dataframeFrames[dataframeFrames["section"] == iSection]
-        if df_section["section"].mean() == dataframeFrames["section"].max():
+        if df_section["section"].mean() == dataframeFrames["section"].max() and df_section["category"].mode()[0] != categorySelect[0]:
             if df_section.shape[0] > 10:
                 mindex = int(df_section.index.max() - 10)
                 maxdex = int(df_section.index.max())
@@ -368,6 +369,11 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
                 SectionsDict[df_section["category"].mode()[0]].append([df_section["Time (s)"].min(), df_section["Time (s)"].max()])
 
     dataframeFrames = pd.concat(df_SectionsList)
+
+    if len(SectionsDict["finish"])>1 and SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]<5:
+        SectionsDict["finish"] = SectionsDict["finish"][:-1]
+    elif SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]>=3:
+        SectionsDict["finish"][-1] = [SectionsDict["finish"][-1][0], SectionsDict["finish"][-1][1]-1]
 
     return dataframeFrames, SectionsDict, StartEndTimes
 
@@ -417,7 +423,7 @@ def loadClassifyPickleFile(picklePath):
 
     return allVideoDict
 
-def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath="", plotBool=False, reImage=False, df_Videos_All=pd.DataFrame()):
+def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath="", plotBool=False, reImage=False, df_Videos_All=pd.DataFrame(), autoClear=True):
     inputVideoName = os.path.basename(inputVideo)
     # print(inputVideoName)
     # print(inputVideo)
@@ -463,6 +469,13 @@ def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath=""
     outputDict["Sections"] = sectionDict
     # outputDict["Sections"] = makeSections(dataframeFrames, blockLateClips=True)
     outputDict["StartEndTimes"] = startEndTimes
+
+    if autoClear:
+        try:
+            shutil.rmtree(imageFolder)
+        except:
+            pass
+
 
     # videoDict["Sections"] = makeSections(videoDict[dictKey], blockLateClips=True)
 

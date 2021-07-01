@@ -155,11 +155,10 @@ def makePornstarList(videoList, publishNewList):
     listPornstar = list(dict.fromkeys(listPornstar))
     print(len(uniqPornstars))
 
-    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'nan']
-    listPornstar = [str(ps) for ps in listPornstar if str(ps) != '0']
-    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Sex']
-    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Bo']
-    listPornstar = [str(ps) for ps in listPornstar if str(ps) != 'Pornstar']
+    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'cum', 'anal', 'milf', 'wife', 'bedroom', 'big ass', 'cuckold',
+                        'sharing', 'big tits', 'cheating', 'watching', 'housewife', 'nan', '0']
+    for remPS in removePS_strings:
+        listPornstar = [str(ps) for ps in listPornstar if str(ps) != remPS]
 
     countPornstars['Pornstar'] = countPornstars.index
     outPornstars = countPornstars[['Pornstar', 'Total']]

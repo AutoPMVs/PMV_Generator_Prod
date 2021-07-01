@@ -301,7 +301,7 @@ def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, gr
             if i == 0:
                 clipStartOffset = 0
             else:
-                clipStartOffset = audioSplits[i-1]
+                clipStartOffset = audioSplits[i] ###################### ERROR with i-1 #######################
         # print(i, audioSplits.index(audioSections[iAudioSect-1]), audioSplits.index(audioSections[iAudioSect]))
         if len(vidRemoveList) == len(videos):
             print("No Available Videos")
@@ -439,6 +439,14 @@ def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSec
     #         if clipStart < vidStartSections[vidSectionPosition[len(vidSectionPosition)]] and clipEnd > vidEndSections[vidSectionPosition[len(vidSectionPosition)]]:
     #             clipEnd = vidStartSections[vidSectionPosition[len(vidSectionPosition)]]
     #             clipStart = clipEnd - clipDiff
+    if len(vidStartSections)==1:
+        if clipStart<vidStartSections[0] or clipEnd>vidEndSections[0]:
+            clipStart = vidStartSections[0]
+            clipEnd = vidStartSections[0] + clipDiff
+        if clipStart<vidStartSections[0] or clipEnd>vidEndSections[0]:
+            clipEnd = vidEndSections[0]
+            clipStart = vidEndSections[0] - clipDiff
+
     return clipStart, clipEnd
 
 def getAudioSections(audioSplits, sectionArray, songSections):
@@ -446,9 +454,9 @@ def getAudioSections(audioSplits, sectionArray, songSections):
     print(musicLength)
 
     sectionArraySumsAdjusted = []
-    sectionArraySumsAdjusted.append(sectionArray[:, 0].sum())
-    sectionArraySumsAdjusted.append(sectionArray[:, 1].sum())#*2)
-    sectionArraySumsAdjusted.append(sectionArray[:, 2].sum())#*2)
+    sectionArraySumsAdjusted.append(sectionArray[:, 0].sum()*1.5)
+    sectionArraySumsAdjusted.append(sectionArray[:, 1].sum()*2)
+    sectionArraySumsAdjusted.append(sectionArray[:, 2].sum()*2)
     sectionArraySumsAdjusted.append(sectionArray[:, 3].sum())
 
     origLength = sectionArray.sum()
@@ -468,7 +476,7 @@ def getAudioSections(audioSplits, sectionArray, songSections):
         if audioLstValue == max(audioSplits) and iSection < sectionArray.shape[1]-1:
             audioLstValue = audioSplits[len(audioSplits)-2]
         print(sectionRatio, ratioTotal, round(musicLength * ratioTotal,0), audioLstValue)
-        if iSection==0:
+        if iSection==0 or len(audioSection)==0:
             audioSectionDiff = audioLstValue - 0
         else:
             audioSectionDiff = audioLstValue - audioSection[-1]
@@ -519,7 +527,10 @@ def getAudioSections(audioSplits, sectionArray, songSections):
         iSection = iSection + 1
 
     for index in missingIndexes:
-        audioSectionFinal.insert(index, audioSectionFinal[index-1])
+        if index==0:
+            audioSectionFinal.insert(index, 0)
+        else:
+            audioSectionFinal.insert(index, audioSectionFinal[index-1])
 
     return audioSectionFinal
 

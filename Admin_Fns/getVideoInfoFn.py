@@ -50,9 +50,11 @@ def groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, 
 
     psList = sortedLists[1]
     psList = title_to_pornstar(pornstarList, psList, title, uploader)
-    psList = [x for x in psList if x != 'Sex']
-    psList = [x for x in psList if x != 'Bo']
-    psList = [x for x in psList if x != 'Pornstar']
+
+    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'Cum', 'Anal', 'Milf', 'Wife', 'Bedroom', 'Big ass', 'Cuckold',
+                        'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0']
+    for remPS in removePS_strings:
+        psList = [x for x in psList if x != remPS]
     psList = psList + customPornstar
     psList2 = pornstar_sorting(psList, nPornstar)
     catList = remove_PS_Cats(psList, catList)
@@ -417,7 +419,7 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
         title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width = getValsFromDict(info_dict)
 
         if 'youporn' not in url and len(errorMessage)==0:
-            line, categories, uploader, foundPornstars = getMoreCatandChannel(url, categories, uploader, foundPornstars)
+            line, categories, uploader, foundPornstars = getMoreCatandChannel(url, categories, uploader, foundPornstars, pornstarList)
         print(url)
         print(categories + tags)
         print(uploader)
@@ -454,7 +456,7 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
     elif exportData==False:
         return exportVideoList(videoList, nCat, nPornstar, iURL, exportData=exportData)
 
-def getMoreCatandChannel(url, categories, uploader, pornstars):
+def getMoreCatandChannel(url, categories, uploader, pornstars, pornstarList):
     headers = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"}
 
     # s = requests.session()
@@ -465,6 +467,8 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
     scraper = cloudscraper.create_scraper(browser={'browser': 'firefox', 'platform': 'windows'})
     source_code = scraper.get(url) #headers=headers)
     soup = BeautifulSoup(source_code.content, 'html.parser')
+
+    newPornstars = []
 
     url_out = ""
     if len(categories)==1 and categories[0]=="":
@@ -478,34 +482,34 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
             if '<a class="ul" href="/profile/' in str(link) and uploader=="":
                 uploader = link.attrs['href'].replace('/profile/', '')
             if '<a href="/' in str(link) and '/pornstar/' in str(link):
-                pornstars.append(str(link.contents[0]))
+                newPornstars.append(str(link.contents[0]))
         # elif 'youporn.com' in url:
         #     print(str(link))
         #     if 'mp4' in str(link) and '202009' in str(link):
         #         url_out = str(link.contents[0])
         #     if '<a class="button bubble-button gray' in str(link) and 'data-espnode="pornstar_tag" href="/pornstar' in str(link):
-        #         pornstars.append(str(link.contents[0]))
+        #         newPornstars.append(str(link.contents[0]))
         #     if '<a class="button bubble-button pink' in str(link) and 'data-espnode="' in str(link) and '_tag" href="/' in str(link):
         #         categories.append(str(link.contents[0]))
         elif 'xvideos.com' in url:
             if '<a class="btn btn-default" href="/tags/' in str(link) and 'All tags' not in str(link):
                 categories.append(str(link.contents[0]))
             if '<a class="btn btn-default label profile" href="/pornstars/' in str(link):
-                pornstars.append(str(link.contents[0].contents[0]))
+                newPornstars.append(str(link.contents[0].contents[0]))
             if '<a class="btn btn-default label main uploader-tag" href="/' in str(link):
                 uploader = str(link.contents[0].contents[0])
         elif 'pervclips.com' in url:
             if '<a class="link" href="https://www.pervclips.com/tube/tags/' in str(link):
                 categories.append(str(link.contents[0]))
             if '<a class="text link" href="https://www.pervclips.com/tube/pornstars/' in str(link):
-                pornstars.append(str(link.contents[0]))
+                newPornstars.append(str(link.contents[0]))
             if '<a class="member" href="https://www.pervclips.com/tube/members/' in str(link):
                 uploader = str(link.contents[0])
         elif 'redtube.com' in url:
             if '<a class="item video_carousel_item video_carousel_category" href="/redtube/' in str(link) or '<a class="item video_carousel_item video_carousel_tag' in str(link):
                 categories.append(str(link.contents[0]).strip('\n').strip())
             if '<a class="tm_pornstar_link pornstar_link js_mpop js-pop" href="/pornstar/' in str(link) and appendBool==False: # in str(link) and '<a class="ps_info_name js_mpop js-pop" href="/pornstar' in str(link):
-                pornstars.append(str(link.attrs['href']).replace('/pornstar/','').replace('+',' '))
+                newPornstars.append(str(link.attrs['href']).replace('/pornstar/','').replace('+',' '))
             if '<a class="share_icon_wrapper share_twitter lazy" data-bg=' in str(link):
                 appendBool=True
             if '<a class="video-infobox-link" href="/channels/' in str(link):
@@ -514,7 +518,7 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
             if ('<a href="/cat/' in str(link) or '<a href="/search' in str(link)) and '/cat/all/' not in str(link) and appendBool:
                 categories.append(str(link.contents[0]))
             if '<a href="/pornstar' in str(link) and appendBool:
-                pornstars.append(str(link.contents[0]))
+                newPornstars.append(str(link.contents[0]))
             if '<a href="/profile/' in str(link) and appendBool==False:
                 appendBool=True
                 uploader = str(link.contents[0])
@@ -522,7 +526,7 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
             if '<a href="https://anysex.com/tags/' in str(link) or '<a href="https://anysex.com/categories/' in str(link):
                 categories.append(str(link.contents[0]))
             if '<a href="https://anysex.com/models/' in str(link):
-                pornstars.append(str(link.contents[0]))
+                newPornstars.append(str(link.contents[0]))
             if '<a href="https://anysex.com/channels/' in str(link):
                 uploader = str(link.contents[1].attrs['content'])
         elif 'gotporn.com' in url:
@@ -533,6 +537,13 @@ def getMoreCatandChannel(url, categories, uploader, pornstars):
         elif 'pornhub.com' in url:
             if '<a class="pstar-list-btn js-mxp"' in str(link):
                 pornstars.append(str(link.attrs['data-mxptext']).strip('\n'))
+
+    if len(newPornstars)>0:
+        i=0
+        while i < len(newPornstars):
+            if newPornstars[i] in pornstarList:
+                pornstars.append(newPornstars[i])
+            i = i + 1
 
     if len(url_out)==0:
         url_out = url
@@ -667,9 +678,10 @@ def exportUpdatedFile(df_videos, fileOut):
     dfVideoListOut = df_videos.fillna('')
     for col in dfVideoListOut.columns:
         if "Pornstar" in col:
-            dfVideoListOut[col] = dfVideoListOut[col].replace('Sex', '')
-            dfVideoListOut[col] = dfVideoListOut[col].replace('Bo', '')
-            dfVideoListOut[col] = dfVideoListOut[col].replace('Pornstar', '')
+            removePS_strings = ['Sex', 'Bo', 'Pornstar', 'Cum', 'Anal', 'Milf', 'Wife', 'Bedroom', 'Big ass', 'Cuckold',
+                                'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0']
+            for remPS in removePS_strings:
+                dfVideoListOut[col] = dfVideoListOut[col].replace(remPS, '')
         elif "Unnamed" in col:
             dfVideoListOut.drop(columns=col, inplace=True)
     dfVideoListOut = dfVideoListOut.replace('nan', '')
