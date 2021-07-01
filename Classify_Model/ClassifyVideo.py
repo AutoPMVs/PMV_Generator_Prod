@@ -432,10 +432,10 @@ def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath=""
     categorySelect = ["other", "other_nsfw", "sex"]
 
     if modelStoragePath == "":
-        imageFolder = "Frames/" + inputVideoName.replace(".mp4", "")
+        imageFolder = "Frames/" + inputVideoName.replace(".mp4", "").replace(".", "")
         picklePath =  r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Classify_Model/PickledVideos.pickle"
     else:
-        imageFolder = modelStoragePath + "/" + "Frames/" + inputVideoName.replace(".mp4", "")
+        imageFolder = modelStoragePath + "/" + "Frames/" + inputVideoName.replace(".mp4", "").replace(".", "")
         picklePath = modelStoragePath + "/" + r"PickledVideos.pickle"
 
     imageFolder = imageFolder.replace(r"’", r"'")
