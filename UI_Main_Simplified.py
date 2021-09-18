@@ -1,6 +1,7 @@
 import os
 import webbrowser
 import pandas as pd
+import _pickle as pickle
 import wx
 from wx.lib.masked import *
 import wx.lib.agw.floatspin as FS
@@ -16,9 +17,15 @@ from PMV_Fns.PMV_Class_Setup import Video_Select
 from PMV_Fns.PMV_Class_Setup import Configuration
 from PMV_Fns.PMV_Class_Setup import DirectoryFile_Info
 from PMV_Fns.PMV_Class_Setup import Music_Info
+from PMV_Fns.PMV_Class_Setup import CH_Settings
 from Classify_Model.ClassifyVideo import loadClassifyPickleFile
+from Admin_Fns.csvFunctions import makeArtistList
+from Cock_Hero_Fns.beatmeterAdder import makeCockHero
 # from PMV_Fns.PMV_Class_Setup import SectionClass
 # from Classify_Model.ClassifyVideo import ImageClass
+import shutil
+from pathlib import Path
+import glob
 
 from Admin_Fns.UI_ProfileManager import loadDefaultProfile
 from Admin_Fns.UI_ProfileManager import removeProfile
@@ -43,11 +50,12 @@ df_Video_Data = [0]
 
 
 class PMV_Class(Thread):
-    def __init__(self, DirectoryFile_Info, Configuration, Video_Select, URL_Data, Music_Info):
+    def __init__(self, DirectoryFile_Info, Configuration, Video_Select, URL_Data, CH_Settings, Music_Info):
         self.DirectoryFile_Info = DirectoryFile_Info
         self.Configuration = Configuration
         self.Music_Info = Music_Info
         self.Video_Select = Video_Select
+        self.CH_Settings = CH_Settings
         self.URL_Data = URL_Data
 
         Thread.__init__(self)
@@ -74,12 +82,47 @@ class Download_Class(Thread):
         downloadVids(self.urls, self.downloadPath)
 
 
+class MakeCockHero_Class(Thread):
+    def __init__(self, inputFile, outputFile, beatSelect, granularity,  nSections, requiredDiff, minSections,
+                 beatSpeed, t_start, t_end, sdfactor, yPosScale, useRankMethod, rollingSections, circleSizeScale,
+                 beatEndPosScale):
+
+        self.inputFile = inputFile
+        self.outputFile = outputFile
+        self.beatSelect = beatSelect
+        self.granularity = granularity
+        self.nSections = nSections
+        self.requiredDiff = requiredDiff
+        self.minSections = minSections
+        self.beatSpeed = beatSpeed
+        self.t_start = t_start
+        self.t_end = t_end
+        self.sdfactor = sdfactor
+        self.yPosScale = yPosScale
+        self.useRankMethod = useRankMethod
+        self.rollingSections= rollingSections
+        self.circleSizeScale = circleSizeScale
+        self.beatEndPosScale = beatEndPosScale
+
+        Thread.__init__(self)
+        self.start()
+
+    def run(self):
+        """Run Worker Thread."""
+        # This is the code executing in the new thread.
+        makeCockHero(self.inputFile, self.outputFile, self.t_start, self.t_end, self.granularity, self.beatSelect,
+                     self.beatSpeed, self.nSections, self.requiredDiff, self.minSections, self.sdfactor,
+                     self.yPosScale, self.useRankMethod, self.rollingSections, self.circleSizeScale,
+                     self.beatEndPosScale)
+
+
 class GetData_Class(Thread):
-    def __init__(self, DirectoryFile_Info, Configuration, Video_Select, URL_Data, Music_Info):
+    def __init__(self, DirectoryFile_Info, Configuration, Video_Select, URL_Data, CH_Settings, Music_Info):
         self.DirectoryFile_Info = DirectoryFile_Info
         self.Configuration = Configuration
         self.Music_Info = Music_Info
         self.Video_Select = Video_Select
+        self.CH_Settings = CH_Settings
         self.URL_Data = URL_Data
 
         Thread.__init__(self)
@@ -98,7 +141,7 @@ iProject = 0
 
 class MyFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, -1, title='PMV Editor (Public Release) v1.2', pos=wx.DefaultPosition)#, size=(900, 800))
+        super().__init__(None, -1, title='PMV Editor (Public Release) v2.0', pos=wx.DefaultPosition)#, size=(900, 800))
         self.Maximize(False)
         self.Maximize(True)
         self.panel = wx.Panel(self)
@@ -144,19 +187,39 @@ class MyFrame(wx.Frame):
         self.frame_menubar = wx.MenuBar()
 
         self.file_menu = wx.Menu()
+        self.file_menu.Append(1, "&Make PMV", "Make PMV")
+        self.file_menu.AppendSeparator()
         self.file_menu.Append(2, "&Source Vids Folder", "Select Input Video Directory")
         self.file_menu.Append(3, "&Music File", "Select Input Music Directory")
         self.file_menu.Append(4, "&Output Folder", "Select Output PMV Directory")
         self.file_menu.AppendSeparator()
-        self.file_menu.Append(5, "&Make PMV", "Make PMV")
+        self.file_menu.Append(5, "&Merge Data", "Merge Lists")
+        self.file_menu.Append(5, "&Merge Classified Video Lists", "Merge Pickle Files")
+        self.file_menu.AppendSeparator()
+        self.file_menu.Append(15, "&Clear Video List Files", "Clear Video List Files")
+        self.file_menu.Append(16, "&Clear Music List Files", "Clear Music List Files")
+        self.file_menu.Append(17, "&Clear Downloaded Videos Folder", "Clear Downloaded Videos Folder")
+        self.file_menu.Append(18, "&Clear Model Frames", "Clear Model Frames")
+        self.file_menu.Append(19, "&Clear Downloaded Music Folder", "Clear Downloaded Music Folder")
+        self.file_menu.Append(20, "&Clear Downloaded Music Vid Folder", "Clear Downloaded Music Vid Folder")
+        self.file_menu.Append(21, "&Clear Excess Pickle Models", "Clear Excess Pickle Models")
+        self.Bind(wx.EVT_MENU, self.onMakePMV, id=1)
         self.Bind(wx.EVT_MENU, self.OnOpenVid, id=2)
         self.Bind(wx.EVT_MENU, self.OnOpenMusicFile, id=3)
         self.Bind(wx.EVT_MENU, self.OnOpenOutput, id=4)
-        self.Bind(wx.EVT_MENU, self.onMakePMV, id=5)
+        self.Bind(wx.EVT_MENU, self.mergeLists, id=5)
+        self.Bind(wx.EVT_MENU, self.OnMergePickles, id=23)
+        self.Bind(wx.EVT_MENU, self.clearVidListFiles, id=15)
+        self.Bind(wx.EVT_MENU, self.clearMusicListFiles, id=16)
+        self.Bind(wx.EVT_MENU, self.clearTempVideoFiles, id=17)
+        self.Bind(wx.EVT_MENU, self.clearVideoFrameFiles, id=18)
+        self.Bind(wx.EVT_MENU, self.clearMusicFiles, id=19)
+        self.Bind(wx.EVT_MENU, self.clearMusicVidFiles, id=20)
+        self.Bind(wx.EVT_MENU, self.clearPickleModelFiles, id=21)
         self.frame_menubar.Append(self.file_menu, "File")
 
         self.edit_menu = wx.Menu()
-        self.edit_menu.Append(1, "&Refresh Video Selections", "Reset the video selections back to none")
+        self.edit_menu.Append(14, "&Refresh Video Selections", "Reset the video selections back to none")
         self.Bind(wx.EVT_MENU, self.resetAll, id=1)
         self.frame_menubar.Append(self.edit_menu, "Edit")
 
@@ -177,11 +240,14 @@ class MyFrame(wx.Frame):
         self.directory_menu.Append(9, "&Music Folder", "Select Input Music Directory")
         self.directory_menu.Append(10, "&Music Vid Folder", "Select Input Music Vid Directory")
         self.directory_menu.Append(11, "&Intro Video", "Select Intro Video (Optional)")
+        self.directory_menu.AppendSeparator()
+        self.directory_menu.Append(22, "&Input PMV for Cock Hero", "Input PMV for Cock Hero (Optional)")
         # self.directory_menu.AppendSeparator()
         # self.Bind(wx.EVT_MENU, self.OnOpenVid, id=4)
         self.Bind(wx.EVT_MENU, self.OnOpenMusic, id=9)
         self.Bind(wx.EVT_MENU, self.OnOpenMusicVid, id=10)
         self.Bind(wx.EVT_MENU, self.OnOpenIntro, id=11)
+        self.Bind(wx.EVT_MENU, self.OnOpenPMVToCH, id=22)
         self.frame_menubar.Append(self.directory_menu, "Directories")
 
         self.url_menu = wx.Menu()
@@ -232,6 +298,14 @@ class MyFrame(wx.Frame):
         self.inputMusicTitle = wx.StaticText(self.panel, -1, 'Input Music Details', style=wx.ALIGN_CENTRE)
         self.mainSizerOptions.Add(self.inputMusicTitle, 0, wx.ALL | wx.EXPAND, spacing)
 
+        self.sizerUseOriginalVidAudio = wx.BoxSizer(wx.HORIZONTAL)
+        self.useOriginalVidAudioLabel = wx.StaticText(self.panel, -1, 'Original Audio Volume:')
+        self.sizerUseOriginalVidAudio.Add(self.useOriginalVidAudioLabel, 1, wx.ALL, spacing)
+        self.useOriginalVidAudioSlider = FS.FloatSpin(self.panel, value=profileOptions["Orig Vid Audio"], min_val=0.0, max_val=4, increment=0.1, agwStyle=FS.FS_LEFT)
+        self.useOriginalVidAudioSlider.SetDigits(1)
+        self.sizerUseOriginalVidAudio.Add(self.useOriginalVidAudioSlider, 1, wx.ALL, spacing)
+        self.mainSizerOptions.Add(self.sizerUseOriginalVidAudio, 0, wx.ALL | wx.EXPAND, spacing)
+
         self.sizerMusicVidFileBool = wx.BoxSizer(wx.HORIZONTAL)
         self.musicVidFileLabel = wx.StaticText(self.panel, -1, 'Use Music Video:')
         self.sizerMusicVidFileBool.Add(self.musicVidFileLabel, 1, wx.ALL, spacing)
@@ -241,7 +315,7 @@ class MyFrame(wx.Frame):
         self.mainSizerOptions.Add(self.sizerMusicVidFileBool, 0, wx.ALL | wx.EXPAND, spacing)
 
         self.sizerMusicFileTrim = wx.BoxSizer(wx.HORIZONTAL)
-        self.musicFileTrimLabel = wx.StaticText(self.panel, -1, 'Trim Music:')
+        self.musicFileTrimLabel = wx.StaticText(self.panel, -1, 'Autotrim Music:')
         self.sizerMusicFileTrim.Add(self.musicFileTrimLabel, 1, wx.ALL, spacing)
         self.musicFileTrim = wx.CheckBox(self.panel)
         self.musicFileTrim.SetValue(profileOptions["Trim Music"])
@@ -335,15 +409,6 @@ class MyFrame(wx.Frame):
         self.orPornstars.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
         self.sizerOrPornstarsBool.Add(self.orPornstars, 1, wx.ALL | wx.EXPAND, spacing)
         self.mainSizerOptions.Add(self.sizerOrPornstarsBool, 0, wx.ALL | wx.EXPAND, spacing)
-
-        self.sizerClassifiedOnlyBool = wx.BoxSizer(wx.HORIZONTAL)
-        self.classifiedOnlyLabel = wx.StaticText(self.panel, -1, 'Use Only Classified Vids:')
-        self.sizerClassifiedOnlyBool.Add(self.classifiedOnlyLabel, 1, wx.ALL, spacing)
-        self.classifiedOnly = wx.CheckBox(self.panel)
-        self.classifiedOnly.SetValue(profileOptions["Only Classified"])
-        self.classifiedOnly.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
-        self.sizerClassifiedOnlyBool.Add(self.classifiedOnly, 1, wx.ALL | wx.EXPAND, spacing)
-        self.mainSizerOptions.Add(self.sizerClassifiedOnlyBool, 0, wx.ALL | wx.EXPAND, spacing)
 
         self.sizerNVidsSelect = wx.BoxSizer(wx.HORIZONTAL)
         self.nVidsLabel = wx.StaticText(self.panel, -1, 'Select Vids Number:')
@@ -474,14 +539,6 @@ class MyFrame(wx.Frame):
         self.sizerFlipVidsBool.Add(self.flipVidCB, 1, wx.ALL, spacing)
         self.mainSizerOptions.Add(self.sizerFlipVidsBool, 0, wx.ALL | wx.EXPAND, spacing)
 
-        self.sizerUseClassifierBool = wx.BoxSizer(wx.HORIZONTAL)
-        self.useClassifierLabel = wx.StaticText(self.panel, -1, 'ClassifyModel:')
-        self.sizerUseClassifierBool.Add(self.useClassifierLabel, 1, wx.ALL, spacing)
-        self.useClassifierBool = wx.CheckBox(self.panel)
-        self.useClassifierBool.SetValue(profileOptions["Classify Model"])
-        self.sizerUseClassifierBool.Add(self.useClassifierBool, 1, wx.ALL, spacing)
-        self.mainSizerOptions.Add(self.sizerUseClassifierBool, 0, wx.ALL | wx.EXPAND, spacing)
-
         ######################
         ## Output Name
         #####################
@@ -493,7 +550,185 @@ class MyFrame(wx.Frame):
         self.sizerUserName.Add(self.userNameName, 1, wx.ALL | wx.EXPAND, spacing)
         self.mainSizerOptions.Add(self.sizerUserName, 0, wx.ALL | wx.EXPAND, spacing)
 
-        self.mainSizerSplit.Add(self.mainSizerOptions, 0, wx.ALL | wx.EXPAND, spacing)
+
+        ######################
+        ## Classify Options
+        #####################
+
+        self.mainSizerRight = wx.BoxSizer(wx.VERTICAL)
+
+        self.mainSizerClassify = wx.BoxSizer(wx.VERTICAL)
+        # self.mainSizerSelections = wx.BoxSizer(wx.VERTICAL)
+        self.mainSizerClassify.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+        self.titleClassify = wx.StaticText(self.panel, -1, 'Classifier Options', style=wx.ALIGN_CENTRE)
+        self.mainSizerClassify.Add(self.titleClassify, 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+        self.sizerUseClassifierBool = wx.BoxSizer(wx.HORIZONTAL)
+        self.useClassifierLabel = wx.StaticText(self.panel, -1, 'Use Classify Model:')
+        self.sizerUseClassifierBool.Add(self.useClassifierLabel, 1, wx.ALL, spacing)
+        self.useClassifierBool = wx.CheckBox(self.panel)
+        self.useClassifierBool.SetValue(profileOptions["Classify Model"])
+        self.sizerUseClassifierBool.Add(self.useClassifierBool, 1, wx.ALL, spacing)
+        self.mainSizerClassify.Add(self.sizerUseClassifierBool, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerClassifiedOnlyBool = wx.BoxSizer(wx.HORIZONTAL)
+        self.classifiedOnlyLabel = wx.StaticText(self.panel, -1, 'Filter for Classified Vids:')
+        self.sizerClassifiedOnlyBool.Add(self.classifiedOnlyLabel, 1, wx.ALL, spacing)
+        self.classifiedOnly = wx.CheckBox(self.panel)
+        self.classifiedOnly.SetValue(profileOptions["Only Classified"])
+        self.classifiedOnly.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
+        self.sizerClassifiedOnlyBool.Add(self.classifiedOnly, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerClassify.Add(self.sizerClassifiedOnlyBool, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.mainSizerClassify.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+        self.titleClassifyRatios = wx.StaticText(self.panel, -1, 'Classifier Ratio Adjustments', style=wx.ALIGN_CENTRE)
+        self.mainSizerClassify.Add(self.titleClassifyRatios, 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+        self.section_ratio_list = ["Intro", "Cunnilingus", "Titfuck", "Blowjob Handjob", "Sex", "Finish"]
+
+        self.sectionRatiosDict = dict()
+
+        for section_ratio in self.section_ratio_list:
+            self.sectionRatiosDict[section_ratio] = dict()
+            self.sectionRatiosDict[section_ratio]["Sizer"] = wx.BoxSizer(wx.HORIZONTAL)
+            self.sectionRatiosDict[section_ratio]["Label"] = wx.StaticText(self.panel, -1, section_ratio + " Ratio")
+            self.sectionRatiosDict[section_ratio]["Sizer"].Add(self.sectionRatiosDict[section_ratio]["Label"], 1, wx.ALL | wx.EXPAND, spacing)
+            self.sectionRatiosDict[section_ratio]["Slider"] = FS.FloatSpin(self.panel, value=profileOptions["Ratio " + section_ratio], min_val=0.0, max_val=5, increment=0.1, agwStyle=FS.FS_LEFT)
+            self.sectionRatiosDict[section_ratio]["Slider"].SetDigits(1)
+            self.sectionRatiosDict[section_ratio]["Sizer"].Add(self.sectionRatiosDict[section_ratio]["Slider"], 1, wx.ALL | wx.EXPAND, spacing)
+            self.mainSizerClassify.Add(self.sectionRatiosDict[section_ratio]["Sizer"], 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.mainSizerClassify.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+        self.titleClassifySound = wx.StaticText(self.panel, -1, 'Sound Filtering', style=wx.ALIGN_CENTRE)
+        self.mainSizerClassify.Add(self.titleClassifySound, 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+
+        self.sizerSoundFilter = wx.BoxSizer(wx.HORIZONTAL)
+        self.soundFilterLabel = wx.StaticText(self.panel, -1, 'Use video sound only from:')
+        self.sizerSoundFilter.Add(self.soundFilterLabel, 1, wx.ALL, spacing)
+        self.soundFilterComboBox = wx.ComboBox(self.panel, wx.EXPAND, choices=self.section_ratio_list)
+        self.soundFilterComboBox.SetValue(profileOptions["Sound Filter"])
+        self.soundFilterComboBox.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
+        self.sizerSoundFilter.Add(self.soundFilterComboBox, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerClassify.Add(self.sizerSoundFilter, 0, wx.ALL | wx.EXPAND, spacing)
+
+
+        ######################
+        ## Cock Hero Options
+        #####################
+
+        self.mainSizerCH = wx.BoxSizer(wx.VERTICAL)
+        # self.mainSizerSelections = wx.BoxSizer(wx.VERTICAL)
+        self.mainSizerCH.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+        self.titleCH = wx.StaticText(self.panel, -1, 'Beatmeter Options (Cock Hero)', style=wx.ALIGN_CENTRE)
+        self.mainSizerCH.Add(self.titleCH, 0, wx.ALL | wx.EXPAND, spacing * 2)
+
+        self.sizerUseCHBool = wx.BoxSizer(wx.HORIZONTAL)
+        self.useCHLabel = wx.StaticText(self.panel, -1, 'Add Beatmeter:')
+        self.sizerUseCHBool.Add(self.useCHLabel, 1, wx.ALL, spacing)
+        self.useCHBool = wx.CheckBox(self.panel)
+        self.useCHBool.SetValue(profileOptions["Beatmeter Bool"])
+        self.sizerUseCHBool.Add(self.useCHBool, 1, wx.ALL, spacing)
+        self.mainSizerCH.Add(self.sizerUseCHBool, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerCH_NSplits = wx.BoxSizer(wx.HORIZONTAL)
+        self.CH_NSplits_label = wx.StaticText(self.panel, -1, "Splits For Beatmeter")
+        self.sizerCH_NSplits.Add(self.CH_NSplits_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.CH_NSplits_slider = FS.FloatSpin(self.panel, value=profileOptions["Splits For Beatmeter"], min_val=0, max_val=50, increment=1, agwStyle=FS.FS_LEFT)
+        self.CH_NSplits_slider.SetDigits(0)
+        self.sizerCH_NSplits.Add(self.CH_NSplits_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerCH_NSplits, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerMin_beat_Sections = wx.BoxSizer(wx.HORIZONTAL)
+        self.Min_beat_Sections_label = wx.StaticText(self.panel, -1, "Min Beat Sections")
+        self.sizerMin_beat_Sections.Add(self.Min_beat_Sections_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.Min_beat_Sections_slider = FS.FloatSpin(self.panel, value=profileOptions["Min Beat Sections"], min_val=0, max_val=50, increment=1, agwStyle=FS.FS_LEFT)
+        self.Min_beat_Sections_slider.SetDigits(0)
+        self.sizerMin_beat_Sections.Add(self.Min_beat_Sections_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerMin_beat_Sections, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerMinRequiredDiff = wx.BoxSizer(wx.HORIZONTAL)
+        self.MinRequiredDiff_label = wx.StaticText(self.panel, -1, "Min Diff Between Sections")
+        self.sizerMinRequiredDiff.Add(self.MinRequiredDiff_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.MinRequiredDiff_slider = FS.FloatSpin(self.panel, value=profileOptions["Min Required Diff"], min_val=0, max_val=50, increment=1, agwStyle=FS.FS_LEFT)
+        self.MinRequiredDiff_slider.SetDigits(0)
+        self.sizerMinRequiredDiff.Add(self.MinRequiredDiff_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerMinRequiredDiff, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerRankMethodBool = wx.BoxSizer(wx.HORIZONTAL)
+        self.RankMethodLabel = wx.StaticText(self.panel, -1, 'Use Ranked Method:')
+        self.sizerRankMethodBool.Add(self.RankMethodLabel, 1, wx.ALL, spacing)
+        self.RankMethodCB = wx.CheckBox(self.panel)
+        self.RankMethodCB.SetValue(profileOptions["CH Ranked Method"])
+        self.RankMethodCB.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
+        self.sizerRankMethodBool.Add(self.RankMethodCB, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerRankMethodBool, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerCH_Comparison_Sections = wx.BoxSizer(wx.HORIZONTAL)
+        self.CH_Comparison_Sections_label = wx.StaticText(self.panel, -1, "Comparison Beat Sections")
+        self.sizerCH_Comparison_Sections.Add(self.CH_Comparison_Sections_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.CH_Comparison_Sections_slider = FS.FloatSpin(self.panel, value=profileOptions["Comparison Beat Sections"], min_val=0, max_val=10, increment=1, agwStyle=FS.FS_LEFT)
+        self.CH_Comparison_Sections_slider.SetDigits(0)
+        self.sizerCH_Comparison_Sections.Add(self.CH_Comparison_Sections_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerCH_Comparison_Sections, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerCH_SD_Factor = wx.BoxSizer(wx.HORIZONTAL)
+        self.CH_SD_Factor_label = wx.StaticText(self.panel, -1, "SD  Factor For Beat Sections")
+        self.sizerCH_SD_Factor.Add(self.CH_SD_Factor_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.CH_SD_Factor_slider = FS.FloatSpin(self.panel, value=profileOptions["CH SD Factor"], min_val=0, max_val=2, increment=0.1, agwStyle=FS.FS_LEFT)
+        self.CH_SD_Factor_slider.SetDigits(1)
+        self.sizerCH_SD_Factor.Add(self.CH_SD_Factor_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerCH_SD_Factor, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerBeatAudioSound = wx.BoxSizer(wx.HORIZONTAL)
+        self.beatAudioSoundLabel = wx.StaticText(self.panel, -1, 'Use Beat Sound:')
+        self.sizerBeatAudioSound.Add(self.beatAudioSoundLabel, 1, wx.ALL, spacing)
+        self.beatAudioSoundComboBox = wx.ComboBox(self.panel, wx.EXPAND, choices=["beat", "boop", "thump", "basspunch"])
+        self.beatAudioSoundComboBox.SetValue(profileOptions["Beat Sound"])
+        self.beatAudioSoundComboBox.Bind(wx.EVT_CHECKBOX, self.pornstarOnCombo)
+        self.sizerBeatAudioSound.Add(self.beatAudioSoundComboBox, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerBeatAudioSound, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerAnimationDuration = wx.BoxSizer(wx.HORIZONTAL)
+        self.AnimationDuration_label = wx.StaticText(self.panel, -1, "Beat Animation Duration")
+        self.sizerAnimationDuration.Add(self.AnimationDuration_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.AnimationDuration_slider = FS.FloatSpin(self.panel, value=profileOptions["Animation Duration"], min_val=1, max_val=10, increment=0.25, agwStyle=FS.FS_LEFT)
+        self.AnimationDuration_slider.SetDigits(2)
+        self.sizerAnimationDuration.Add(self.AnimationDuration_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerAnimationDuration, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerY_Pos_Scale = wx.BoxSizer(wx.HORIZONTAL)
+        self.Y_Pos_Scale_label = wx.StaticText(self.panel, -1, "Y Position of Beat Bar")
+        self.sizerY_Pos_Scale.Add(self.Y_Pos_Scale_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.Y_Pos_Scale_slider = FS.FloatSpin(self.panel, value=profileOptions["Y Position of Beat Bar"], min_val=0, max_val=1, increment=0.025, agwStyle=FS.FS_LEFT)
+        self.Y_Pos_Scale_slider.SetDigits(3)
+        self.sizerY_Pos_Scale.Add(self.Y_Pos_Scale_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerY_Pos_Scale, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerX_Pos_Scale = wx.BoxSizer(wx.HORIZONTAL)
+        self.X_Pos_Scale_label = wx.StaticText(self.panel, -1, "X Position of Beat End")
+        self.sizerX_Pos_Scale.Add(self.X_Pos_Scale_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.X_Pos_Scale_slider = FS.FloatSpin(self.panel, value=profileOptions["X Position of Beat End"], min_val=0, max_val=1, increment=0.025, agwStyle=FS.FS_LEFT)
+        self.X_Pos_Scale_slider.SetDigits(3)
+        self.sizerX_Pos_Scale.Add(self.X_Pos_Scale_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerX_Pos_Scale, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.sizerCircleSizeScale = wx.BoxSizer(wx.HORIZONTAL)
+        self.CircleSizeScale_label = wx.StaticText(self.panel, -1, "Beat Circle Size Scale")
+        self.sizerCircleSizeScale.Add(self.CircleSizeScale_label, 1, wx.ALL | wx.EXPAND, spacing)
+        self.CircleSizeScale_slider = FS.FloatSpin(self.panel, value=profileOptions["Beat Circle Size Scale"], min_val=0, max_val=0.2, increment=0.005, agwStyle=FS.FS_LEFT)
+        self.CircleSizeScale_slider.SetDigits(3)
+        self.sizerCircleSizeScale.Add(self.CircleSizeScale_slider, 1, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerCH.Add(self.sizerCircleSizeScale, 0, wx.ALL | wx.EXPAND, spacing)
+
+        self.mainSizerRight.Add(self.mainSizerClassify, 0, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerRight.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+        self.mainSizerRight.Add(self.mainSizerCH, 0, wx.ALL | wx.EXPAND, spacing)
+
+
+
 
         ######################
         ## Music Selection
@@ -628,6 +863,18 @@ class MyFrame(wx.Frame):
         self.sizerVideoSelect.Add(self.videURLselect, 1, wx.EXPAND, spacing)
         self.mainSizerSelections.Add(self.sizerVideoSelect, 1, wx.ALL | wx.EXPAND, spacing)
 
+        # #################################
+        # ####### Section Selections
+        # #################################
+        #
+        # self.sizerOutputFile = wx.BoxSizer(wx.HORIZONTAL)
+        # self.outputFileLabel = wx.StaticText(self.panel, -1, 'Output File Name:')
+        # self.sizerOutputFile.Add(self.outputFileLabel, 0, wx.ALL | wx.EXPAND, spacing)
+        # self.outputFileName = wx.TextCtrl(self.panel, value='')
+        # self.sizerOutputFile.Add(self.outputFileName, 1, wx.ALL | wx.EXPAND, spacing)
+        # self.mainSizerSelections.Add(self.sizerOutputFile, 0, wx.ALL | wx.EXPAND, spacing)
+
+
         #################################
         ####### Output Name
         #################################
@@ -652,6 +899,10 @@ class MyFrame(wx.Frame):
         self.downloadButton.Bind(wx.EVT_BUTTON, self.onDownload)
         self.sizerButtons.Add(self.downloadButton, 0, wx.ALL | wx.CENTER, spacing)
 
+        self.makeCHButton = wx.Button(self.panel, label='Make Cock Hero')
+        self.makeCHButton.Bind(wx.EVT_BUTTON, self.onAddBeatmeter)
+        self.sizerButtons.Add(self.makeCHButton, 0, wx.ALL | wx.CENTER, spacing)
+
         self.runButton = wx.Button(self.panel, label='Make PMV')
         self.runButton.Bind(wx.EVT_BUTTON, self.onMakePMV)
         self.sizerButtons.Add(self.runButton, 0, wx.ALL | wx.CENTER, spacing)
@@ -665,11 +916,19 @@ class MyFrame(wx.Frame):
         self.mainSizerSelections.Add(self.logger, 0, wx.ALL | wx.EXPAND, spacing)
 
         self.mainSizerSplit.Add(wx.StaticLine(self.panel, style=wx.LI_VERTICAL), 0, wx.ALL | wx.EXPAND, spacing*2)
+        self.mainSizerSplit.Add(self.mainSizerOptions, 0, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerSplit.Add(wx.StaticLine(self.panel, style=wx.LI_VERTICAL), 0, wx.ALL | wx.EXPAND, spacing*2)
         self.mainSizerSplit.Add(self.mainSizerSelections, 0, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerSplit.Add(wx.StaticLine(self.panel, style=wx.LI_VERTICAL), 0, wx.ALL | wx.EXPAND, spacing*2)
+        self.mainSizerSplit.Add(self.mainSizerRight, 0, wx.ALL | wx.EXPAND, spacing)
+        self.mainSizerSplit.Add(wx.StaticLine(self.panel, style=wx.LI_VERTICAL), 0, wx.ALL | wx.EXPAND, spacing*2)
+
 
         # self.mainSizer.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing)
         self.mainSizer.Add(self.mainSizerSplit, 0, wx.ALL | wx.EXPAND, spacing)
         self.mainSizer.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing)
+
+
         self.panel.SetSizer(self.mainSizer)
 
         self.Show()
@@ -683,8 +942,8 @@ class MyFrame(wx.Frame):
         self.filterMainSizers(False)
 
     def advancedView(self, event):
-        self.filterMainSizers(True)
         self.filterAdditionalSizers(True)
+        self.filterMainSizers(True)
 
     def filterAdditionalSizers(self, OnOff):
         self.sizerProfileSelect.ShowItems(show=OnOff)
@@ -692,11 +951,13 @@ class MyFrame(wx.Frame):
         self.sizerVideoSelect.ShowItems(show=OnOff)
         self.sizerIndividualVid.ShowItems(show=OnOff)
         self.mainSizerCategoryVidSelect.ShowItems(show=OnOff)
-        self.mainSizerMusic.ShowItems(show=OnOff)
+        # self.mainSizerSelections.ShowItems(show=OnOff)
+        self.mainSizerOptions.ShowItems(show=OnOff)
+        # self.mainSizerMusic.ShowItems(show=OnOff)
 
-        self.sizerNVidsAvailable.ShowItems(show=OnOff)
-        self.sizerNVidsSelect.ShowItems(show=OnOff)
-        self.sizerUrlAddBtn.ShowItems(show=OnOff)
+        # self.sizerNVidsAvailable.ShowItems(show=OnOff)
+        # self.sizerNVidsSelect.ShowItems(show=OnOff)
+        # self.sizerUrlAddBtn.ShowItems(show=OnOff)
 
     def filterMainSizers(self, OnOff):
         self.sizerMusicVidFileBool.ShowItems(show=OnOff)
@@ -727,11 +988,17 @@ class MyFrame(wx.Frame):
         self.sizerFlipVidsBool.ShowItems(show=OnOff)
         self.sizerUseClassifierBool.ShowItems(show=OnOff)
         self.sizerUserName.ShowItems(show=OnOff)
+
+
+        self.mainSizerRight.ShowItems(show=OnOff) #.Add(self.mainSizerClassify, 0, wx.ALL | wx.EXPAND, spacing)
+        # self.mainSizerRight.Add(wx.StaticLine(self.panel), 0, wx.ALL | wx.EXPAND, spacing * 2)
+        # self.mainSizerRight.Add(self.mainSizerCH, 0, wx.ALL | wx.EXPAND, spacing)
         # self.panel.Layout()
 
     def loadProfileIntoUI(self, event):
         self.currentProfile = self.profileComboBox.GetValue()
         profileOptions = loadProfile(self.currentProfile)
+        print(profileOptions)
         self.setProfileValues(profileOptions)
         
     def saveProfile(self, event):
@@ -762,6 +1029,7 @@ class MyFrame(wx.Frame):
         self.customOutputDir = profileOptions["defaultNewPMVsPath"]
         self.introVidName = profileOptions["introVideoPath"]
         self.username = profileOptions["Username"]
+        self.useOriginalVidAudioSlider.SetValue(profileOptions["Orig Vid Audio"])
         self.musicVidFileBool.SetValue(profileOptions["Use Music Video"])
         self.musicFileTrim.SetValue(profileOptions["Trim Music"])
         self.musicFileStart.ChangeValue(profileOptions["Start Music"])
@@ -786,6 +1054,23 @@ class MyFrame(wx.Frame):
         self.resizeCB.SetValue(profileOptions["Resize"])
         self.flipVidCB.SetValue(profileOptions["Flip Vids"])
         self.useClassifierBool.SetValue(profileOptions["Classify Model"])
+        self.soundFilterComboBox.SetValue(profileOptions["Sound Filter"])
+
+        for section_ratio in self.sectionRatiosDict:
+            self.sectionRatiosDict[section_ratio]["Slider"].SetValue(profileOptions["Ratio " + section_ratio])
+
+        self.useCHBool.SetValue(profileOptions["Beatmeter Bool"])
+        self.CH_NSplits_slider.SetValue(profileOptions["Splits For Beatmeter"])
+        self.Min_beat_Sections_slider.SetValue(profileOptions["Min Beat Sections"])
+        self.MinRequiredDiff_slider.SetValue(profileOptions["Min Required Diff"])
+        self.RankMethodCB.SetValue(profileOptions["CH Ranked Method"])
+        self.CH_Comparison_Sections_slider.SetValue(profileOptions["Comparison Beat Sections"])
+        self.CH_SD_Factor_slider.SetValue(profileOptions["CH SD Factor"])
+        self.beatAudioSoundComboBox.SetValue(profileOptions["Beat Sound"])
+        self.AnimationDuration_slider.SetValue(profileOptions["Animation Duration"])
+        self.Y_Pos_Scale_slider.SetValue(profileOptions["Y Position of Beat Bar"])
+        self.X_Pos_Scale_slider.SetValue(profileOptions["X Position of Beat End"])
+        self.CircleSizeScale_slider.SetValue(profileOptions["Beat Circle Size Scale"])
 
     def getProfileValues(self):
         profileOptions=dict()
@@ -795,6 +1080,7 @@ class MyFrame(wx.Frame):
         profileOptions["defaultNewPMVsPath"] = self.customOutputDir
         profileOptions["introVideoPath"] = self.introVidName
         profileOptions["Username"] = self.userNameName.GetValue()
+        profileOptions["Orig Vid Audio"] = self.useOriginalVidAudioSlider.GetValue()
         profileOptions["Use Music Video"] = self.musicVidFileBool.GetValue()
         profileOptions["Trim Music"] = self.musicFileTrim.GetValue()
         profileOptions["Start Music"] = self.musicFileStart.GetValue()
@@ -819,8 +1105,135 @@ class MyFrame(wx.Frame):
         profileOptions["Resize"] = self.resizeCB.GetValue()
         profileOptions["Flip Vids"] = self.flipVidCB.GetValue()
         profileOptions["Classify Model"] = self.useClassifierBool.GetValue()
+        profileOptions["Sound Filter"] = self.soundFilterComboBox.GetValue()
+        for section_ratio in self.sectionRatiosDict:
+            profileOptions["Ratio " + section_ratio] = self.sectionRatiosDict[section_ratio]["Slider"].GetValue()
+        profileOptions["Beatmeter Bool"] = self.useCHBool.GetValue()
+        profileOptions["Splits For Beatmeter"] = self.CH_NSplits_slider.GetValue()
+        profileOptions["Min Beat Sections"] = self.Min_beat_Sections_slider.GetValue()
+        profileOptions["Min Required Diff"] = self.MinRequiredDiff_slider.GetValue()
+        profileOptions["CH Ranked Method"] = self.RankMethodCB.GetValue()
+        profileOptions["Comparison Beat Sections"] = self.CH_Comparison_Sections_slider.GetValue()
+        profileOptions["CH SD Factor"] = self.CH_SD_Factor_slider.GetValue()
+        profileOptions["Beat Sound"] = self.beatAudioSoundComboBox.GetValue()
+        profileOptions["Animation Duration"] = self.AnimationDuration_slider.GetValue()
+        profileOptions["Y Position of Beat Bar"] = self.Y_Pos_Scale_slider.GetValue()
+        profileOptions["X Position of Beat End"] = self.X_Pos_Scale_slider.GetValue()
+        profileOptions["Beat Circle Size Scale"] = self.CircleSizeScale_slider.GetValue()
 
         return profileOptions
+
+    def mergeLists(self, event):
+        ### Merge Porn Lists
+        df_videos = pd.read_csv(PathList["combinedPornListPath"])
+        print(df_videos.shape[0])
+        os.chdir(PathList["DataListOutPath"])
+        extension = 'csv'
+        all_filenames = [i for i in glob.glob('*.{}'.format(extension))]
+        combined_csv = pd.concat([df_videos] + [pd.read_csv(f) for f in all_filenames], ignore_index=True, sort=False)
+        print(combined_csv.shape[0])
+        combined_csv = combined_csv[~combined_csv['url'].isna()]
+        combined_csv = combined_csv.drop_duplicates(subset=['url'], keep='first')
+        combined_csv.sort_values(['_Channel', 'Title'], inplace=True)
+        combined_csv.to_csv(PathList["combinedPornListPath"], index=False, encoding='utf-8-sig')
+
+        ### Merge Music Lists
+        df_music = pd.read_csv(PathList["combinedMusicListPath"])
+        os.chdir(PathList["MusicListOutPath"])
+        extension = 'csv'
+        all_filenames = [i for i in glob.glob('*.{}'.format(extension))]
+        dfs = []
+        for f in all_filenames:
+            dfs.append(pd.read_csv(f))
+        combined_csv = pd.concat([df_music] + dfs, ignore_index=True, sort=False)
+        combined_csv[['Start', 'End']] = combined_csv[['Start', 'End']].fillna(value=0)
+        combined_csv = combined_csv.drop_duplicates(subset=['id'], keep='first')
+        combined_csv.sort_values(by=['_Artist1', 'Title'], inplace=True)
+        makeArtistList(combined_csv, True)
+        combined_csv.to_csv(PathList["combinedMusicListPath"], index=False, encoding='utf-8-sig')
+        self.OnMergePickles(event)
+
+    def OnMergePickles(self, event):
+        picklePathIn = self.modelStoragePath + "/PickledVideos"
+        picklePathOut = self.modelStoragePath
+        os.chdir(picklePathIn)
+        extension = 'pickle'
+        all_filenames = [i for i in glob.glob('*.{}'.format(extension))]
+        dictList = []
+        for file in all_filenames:
+            path = picklePathIn + "/" + file
+            print(path)
+            with open(path, 'rb') as handle:
+                dictList.append(pickle.load(handle))
+        self.allVideoDict = self.DictListUpdate(dictList)
+        with open(picklePathOut + "/" + "PickledVideos.pickle", 'wb') as handle:
+            pickle.dump(self.allVideoDict, handle)
+
+    def DictListUpdate(self, dictLists):
+        for dictVar in dictLists:
+            for key in dictVar:
+                if key not in dictLists[-1]:
+                    dictLists[-1][key] = dictVar[key]
+        return dictLists[-1]
+
+    def clearVidListFiles(self, event):
+        vidDataListFolder = PathList["DataListOutPath"]
+        for file in os.listdir(vidDataListFolder):
+            if "combinedPornDir.csv" not in file:
+                if 'init__.py' not in file:
+                    os.remove(vidDataListFolder + "/" + file)
+
+    def clearMusicListFiles(self, event):
+        musicDataListFolder = PathList["MusicListOutPath"]
+        for file in os.listdir(musicDataListFolder):
+            if "combinedMusicList.csv" not in file:
+                if 'init__.py' not in file:
+                    os.remove(musicDataListFolder + "/" + file)
+
+    def clearTempVideoFiles(self, event):
+        tempVidListFolder = PathList["defaultVideoDownloadPath"]
+        for file in os.listdir(tempVidListFolder):
+            # if "LocalRandom" in file:
+            if 'init__.py' not in file:
+                try:
+                    shutil.rmtree(tempVidListFolder + "/" + file)
+                except:
+                    pass
+
+    def clearVideoFrameFiles(self, event):
+        frameDataListFolder = PathList["defaultModelStoragePath"] + "/" + "Frames"
+        for file in os.listdir(frameDataListFolder):
+            if 'init__.py' not in file:
+                shutil.rmtree(frameDataListFolder + "/" + file)
+
+    def clearMusicFiles(self, event):
+        musicFileListFolder = PathList["defaultMusicDownloadPath"]
+        for file in os.listdir(musicFileListFolder):
+            if 'init__.py' not in file:
+                try:
+                    os.remove(musicFileListFolder + "/" + file)
+                except:
+                    pass
+
+    def clearMusicVidFiles(self, event):
+        musicVidFileListFolder = PathList["defaultMusicVidDownloadPath"]
+        for file in os.listdir(musicVidFileListFolder):
+            if 'init__.py' not in file:
+                try:
+                    os.remove(musicVidFileListFolder + "/" + file)
+                except:
+                    pass
+
+    def clearPickleModelFiles(self, event):
+        musicVidFileListFolder = PathList["defaultModelStoragePath"]
+        for file in os.listdir(musicVidFileListFolder):
+            if 'init__.py' not in file:
+                if ".pickle" in file and "PickledVideos.pickle" not in file:
+                    try:
+                        os.remove(musicVidFileListFolder + "/" + file)
+                    except:
+                        pass
+
 
     def OnOpenIntro(self, event):
         dlg = wx.FileDialog(self, "Choose a file", style=wx.FD_OPEN, defaultFile=self.introVidName)
@@ -854,15 +1267,19 @@ class MyFrame(wx.Frame):
         return ArtistString
 
     def changeTitleName(self):
+        chTitle = ""
+        if self.useCHBool.GetValue():
+            chTitle = "Cock Hero - "
+
         if len(self.includePornstars+self.includeChannels+self.includeCategories)>0:
-            self.outputFileName.SetValue(" ".join(self.includePornstars+self.includeChannels+self.includeCategories) + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
+            self.outputFileName.SetValue(chTitle + " ".join(self.includePornstars+self.includeChannels+self.includeCategories) + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
         else:
             fileName = os.path.basename(os.path.normpath(self.customVidDir))
             if fileName != os.path.basename(os.path.normpath(PathList["defaultVideoDownloadPath"])):
-                self.outputFileName.SetValue(fileName.replace("LocalRandomVideos","") + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
-                self.outputFileName.SetValue(fileName.replace("RandomVideos","") + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
+                self.outputFileName.SetValue(chTitle + fileName.replace("LocalRandomVideos","") + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
+                self.outputFileName.SetValue(chTitle + fileName.replace("RandomVideos","") + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
             else:
-                self.outputFileName.SetValue(' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
+                self.outputFileName.SetValue(chTitle + ' PMV - ' + self.musicName + ' - ' + self.musicArtist + ' - ' + self.username)
 
 
     def joinSummaryMusicString(self, x):
@@ -893,6 +1310,18 @@ class MyFrame(wx.Frame):
         dlg = wx.DirDialog(self, "Choose a file", defaultPath=self.customOutputDir, style=wx.FD_OPEN)
         if dlg.ShowModal() == wx.ID_OK:
             self.customOutputDir = dlg.Path + "/"
+        dlg.Destroy()
+
+    def OnOpenPMVToCH(self, event):
+        dlg = wx.FileDialog(self, "Choose a file", style=wx.FD_OPEN, defaultDir =self.customOutputDir)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.musicVidToCH = dlg.GetPath()
+
+        fileName = os.path.basename(self.musicVidToCH)
+        fileName = fileName.replace(".mp4", "")
+
+        self.outputFileName.SetValue('Cock Hero - ' + fileName)
+
         dlg.Destroy()
 
     def resetVideoListDuration(self, event):
@@ -1142,6 +1571,8 @@ class MyFrame(wx.Frame):
     def onMakePMV(self, event):
         self.logger.ChangeValue("Making PMV, please wait...")
 
+        soundFromIndex = self.section_ratio_list.index(self.soundFilterComboBox.GetValue())
+
         df_Video_Data[0] = self.videoListOriginal
 
         videoURL_List = self.videURLselect.GetValue().split('\n')
@@ -1170,17 +1601,37 @@ class MyFrame(wx.Frame):
                                                      flipBool=False,
                                                      addIntro=self.addIntroBool.GetValue(),
                                                      userName=self.userNameName.GetValue(),
-                                                     UseClassifyModel=self.useClassifierBool.GetValue()),
+                                                     UseClassifyModel=self.useClassifierBool.GetValue(),
+                                                     sectionArray=[self.sectionRatiosDict["Intro"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Cunnilingus"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Titfuck"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Blowjob Handjob"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Sex"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Finish"]["Slider"].GetValue()]),
                          Video_Select=None,
                          URL_Data=URL_Data(videoURLs=videoURL_List,
                                            musicURL=self.musicURLselect.GetValue()),
+                         CH_Settings=CH_Settings(make_CH_Vid=self.useCHBool.GetValue(),
+                                                 nSections=self.CH_NSplits_slider.GetValue(),
+                                                 minSections=self.Min_beat_Sections_slider.GetValue(),
+                                                 requiredDiff=self.MinRequiredDiff_slider.GetValue(),
+                                                 useRankMethod=self.RankMethodCB.GetValue(),
+                                                 rollingSections=self.CH_Comparison_Sections_slider.GetValue(),
+                                                 sdfactor=self.CH_SD_Factor_slider.GetValue(),
+                                                 beatSelect=self.beatAudioSoundComboBox.GetValue(),
+                                                 animationDuration=self.AnimationDuration_slider.GetValue(),
+                                                 yPosScale=self.Y_Pos_Scale_slider.GetValue(),
+                                                 circleSizeScale=self.CircleSizeScale_slider.GetValue(),
+                                                 beatEndPosScale=self.X_Pos_Scale_slider.GetValue()),
                          Music_Info=Music_Info(musicName=self.musicName,
                                                musicType='mp3',
                                                songStart=self.musicFileStart.GetValue(),
                                                songEnd=self.musicFileEnd.GetValue(),
                                                musicVideoBool=self.musicVidFileBool.GetValue(),
                                                musicVideoOccuranceFactor=self.occuranceSlider.GetValue(),
-                                               trimSong=self.musicFileTrim.GetValue()))
+                                               trimSong=self.musicFileTrim.GetValue(),
+                                               origSoundScale=self.useOriginalVidAudioSlider.GetValue(),
+                                               origSoundFromSection=soundFromIndex))
 
 
         self.logger.ChangeValue("Making PMV! " + self.PMV_Final.DirectoryFile_Info.finalVidName + ". Check terminal for progress.")
@@ -1188,50 +1639,83 @@ class MyFrame(wx.Frame):
     def onGetData(self, event):
         self.logger.ChangeValue("Getting new data for vids and adding to database, please wait...")
 
+        soundFromIndex = self.section_ratio_list.index(self.soundFilterComboBox.GetValue())
+
         df_Video_Data[0] = self.videoListOriginal
 
         videoURL_List = self.videURLselect.GetValue().split('\n')
 
         GetData_Class(DirectoryFile_Info=DirectoryFile_Info(finalVidName = self.outputFileName.GetValue(),
-                                                            vidDownloadDir=self.customVidDir + "/",
-                                                            pythonDir=PathList["pythonPath"],
-                                                            introVidDir=self.introVidName,
-                                                            musicDir=self.customMusicDir,
-                                                            musicVidDir=self.customMusicVidDir,
-                                                            finalVidDir=self.customOutputDir,
-                                                            musicFilePath=self.musicFilePath,
-                                                            ModelStorageDir=self.modelStoragePath),
-                     Configuration=Configuration(startEndTime=[self.startTrim.GetValue(), self.endTrim.GetValue()],
-                                                 sd_scale=self.sdSlider.GetValue(),
-                                                 nSplits=int(self.nSplitsSlider.GetValue()),
-                                                 randomise=self.randomiseCB.GetValue(),
-                                                 granularity=self.granularitySlider.GetValue(),
-                                                 min_length=self.minClipLengthSlider.GetValue(),
-                                                 videoNumber=0,
-                                                 minVidLength=self.vidLengthMin.GetValue()*60,
-                                                 maxVidLength=self.vidLengthMax.GetValue()*60,
-                                                 cropVidFraction=self.outputVidCropFracSlider.GetValue(),
-                                                 cropVidBool=self.outputVidCrop.GetValue(),
-                                                 resize=self.resizeCB.GetValue(),
-                                                 flipBool=False,
-                                                 addIntro=self.addIntroBool.GetValue(),
-                                                 userName=self.userNameName.GetValue(),
-                                                 UseClassifyModel=self.useClassifierBool.GetValue()),
-                     Video_Select=None,
-                     URL_Data=URL_Data(videoURLs=videoURL_List,
-                                       musicURL=self.musicURLselect.GetValue()),
-                     Music_Info=Music_Info(musicName=self.musicName,
-                                           musicType='mp3',
-                                           songStart=self.musicFileStart.GetValue(),
-                                           songEnd=self.musicFileEnd.GetValue(),
-                                           musicVideoBool=self.musicVidFileBool.GetValue(),
-                                           musicVideoOccuranceFactor=self.occuranceSlider.GetValue(),
-                                           trimSong=self.musicFileTrim.GetValue()))
+                                                                         vidDownloadDir=self.customVidDir + "/",
+                                                                         pythonDir=PathList["pythonPath"],
+                                                                         introVidDir=self.introVidName,
+                                                                         musicDir=self.customMusicDir,
+                                                                         musicVidDir=self.customMusicVidDir,
+                                                                         finalVidDir=self.customOutputDir,
+                                                                         musicFilePath=self.musicFilePath,
+                                                                         ModelStorageDir=self.modelStoragePath),
+                         Configuration=Configuration(startEndTime=[self.startTrim.GetValue(), self.endTrim.GetValue()],
+                                                     sd_scale=self.sdSlider.GetValue(),
+                                                     nSplits=int(self.nSplitsSlider.GetValue()),
+                                                     randomise=self.randomiseCB.GetValue(),
+                                                     granularity=self.granularitySlider.GetValue(),
+                                                     min_length=self.minClipLengthSlider.GetValue(),
+                                                     videoNumber=0,
+                                                     minVidLength=self.vidLengthMin.GetValue()*60,
+                                                     maxVidLength=self.vidLengthMax.GetValue()*60,
+                                                     cropVidFraction=self.outputVidCropFracSlider.GetValue(),
+                                                     cropVidBool=self.outputVidCrop.GetValue(),
+                                                     resize=self.resizeCB.GetValue(),
+                                                     flipBool=False,
+                                                     addIntro=self.addIntroBool.GetValue(),
+                                                     userName=self.userNameName.GetValue(),
+                                                     UseClassifyModel=self.useClassifierBool.GetValue(),
+                                                     sectionArray=[self.sectionRatiosDict["Intro"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Cunnilingus"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Titfuck"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Blowjob Handjob"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Sex"]["Slider"].GetValue(),
+                                                                   self.sectionRatiosDict["Finish"]["Slider"].GetValue()]),
+                         Video_Select=None,
+                         URL_Data=URL_Data(videoURLs=videoURL_List,
+                                           musicURL=self.musicURLselect.GetValue()),
+                         CH_Settings=CH_Settings(make_CH_Vid=self.useCHBool.GetValue(),
+                                                 nSections=self.CH_NSplits_slider.GetValue(),
+                                                 minSections=self.Min_beat_Sections_slider.GetValue(),
+                                                 requiredDiff=self.MinRequiredDiff_slider.GetValue(),
+                                                 useRankMethod=self.RankMethodCB.GetValue(),
+                                                 rollingSections=self.CH_Comparison_Sections_slider.GetValue(),
+                                                 sdfactor=self.CH_SD_Factor_slider.GetValue(),
+                                                 beatSelect=self.beatAudioSoundComboBox.GetValue(),
+                                                 animationDuration=self.AnimationDuration_slider.GetValue(),
+                                                 yPosScale=self.Y_Pos_Scale_slider.GetValue(),
+                                                 circleSizeScale=self.CircleSizeScale_slider.GetValue(),
+                                                 beatEndPosScale=self.X_Pos_Scale_slider.GetValue()),
+                         Music_Info=Music_Info(musicName=self.musicName,
+                                               musicType='mp3',
+                                               songStart=self.musicFileStart.GetValue(),
+                                               songEnd=self.musicFileEnd.GetValue(),
+                                               musicVideoBool=self.musicVidFileBool.GetValue(),
+                                               musicVideoOccuranceFactor=self.occuranceSlider.GetValue(),
+                                               trimSong=self.musicFileTrim.GetValue(),
+                                               origSoundScale=self.useOriginalVidAudioSlider.GetValue(),
+                                               origSoundFromSection=soundFromIndex))
 
     def onDownload(self, event):
         self.logger.ChangeValue("Downloading the selected vids, please wait...")
         videoURL_List = self.videURLselect.GetValue().split('\n')
         Download_Class(urls=videoURL_List, downloadPath=self.customVidDir + "/")
+
+    def onAddBeatmeter(self, event):
+        self.logger.ChangeValue("Adding beatmeter to video, please wait...")
+
+        MakeCockHero_Class(self.musicVidToCH, self.customOutputDir + "/" + self.outputFileName.GetValue() + ".mp4", self.beatAudioSoundComboBox.GetValue(),
+                           self.granularitySlider.GetValue(), self.CH_NSplits_slider.GetValue(),
+                           self.MinRequiredDiff_slider.GetValue(), self.Min_beat_Sections_slider.GetValue(),
+                           self.AnimationDuration_slider.GetValue(), self.musicFileStart.GetValue(), self.musicFileEnd.GetValue(),
+                           self.CH_SD_Factor_slider.GetValue(), self.Y_Pos_Scale_slider.GetValue(), self.RankMethodCB.GetValue(),
+                           int(self.CH_Comparison_Sections_slider.GetValue()), self.CircleSizeScale_slider.GetValue(),
+                           self.X_Pos_Scale_slider.GetValue())
 
 if __name__ == '__main__':
     app = wx.App()

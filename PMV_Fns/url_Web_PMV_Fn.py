@@ -87,12 +87,16 @@ def genPMVs(PMV, sampleHeight, sampleWidth, df_Video_Data):
         if len(PMV.Configuration.userName) > 0 and PMV.Configuration.userName not in PMV.DirectoryFile_Info.finalVidName:
             PMV.DirectoryFile_Info.finalVidName = PMV.DirectoryFile_Info.finalVidName + ' - ' + PMV.Configuration.userName
 
+    if PMV.Music_Info.origSoundScale>0:
+        if "PMV (Sound)" not in PMV.DirectoryFile_Info.finalVidName:
+            PMV.DirectoryFile_Info.finalVidName = PMV.DirectoryFile_Info.finalVidName.replace("PMV - ", "PMV (Sound) - ")
+
     file_out = PMV.DirectoryFile_Info.finalVidDir + PMV.DirectoryFile_Info.finalVidName + '.mp4' #  filetypeout
     print(mp3_dir)
     mp3_dir = mp3_dir.replace('"', "'")
     mp3_dir = mp3_dir.replace('||', "_")
 
-    reshaped_data, first_data, audioclip, ratio, bitrate, songStart, songEnd, songSections = inputMusic(mp3_dir, trimSong=PMV.Music_Info.trimSong, songStart=PMV.Music_Info.songStart, songEnd=PMV.Music_Info.songEnd, granularity=PMV.Configuration.granularity)
+    reshaped_data, first_data, audioclip, ratio, bitrate, songStart, songEnd, songSections = inputMusic(mp3_dir, autoTrimSong=PMV.Music_Info.trimSong, songStart=PMV.Music_Info.songStart, songEnd=PMV.Music_Info.songEnd, granularity=PMV.Configuration.granularity)
     PMV.Music_Info.songStart = songStart
     PMV.Music_Info.songEnd = songEnd
     diff_data = getElementDiff(reshaped_data)
@@ -104,11 +108,11 @@ def genPMVs(PMV, sampleHeight, sampleWidth, df_Video_Data):
     videoData, origVidName, videoDicts = getVideoData(PMV, df_Video_Data, allVideoDict)
     videos, videoData = processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_Video_Data) #, PMV.Music_Info.musicVideoBool, selectedVids, PMV.Configuration.startTime, PMV.Configuration.subtractEnd)
     if PMV.Configuration.UseClassifyModel:
-        clips = videoSplitsUseClassifyModel(result, videos, videoData, songSections,
-                                            PMV.Configuration.granularity, PMV.Configuration.randomise, origVidName, videoDicts)
+        clips, soundStart = videoSplitsUseClassifyModel(result, videos, videoData, songSections, PMV.Configuration.granularity, PMV.Configuration.randomise, origVidName, videoDicts, PMV.Configuration.sectionArray, PMV.Music_Info.origSoundFromSection)
     else:
         clips = videoSplits(result, videos, videoData, first_data, bitrate, PMV.Configuration.granularity, PMV.Configuration.randomise, origVidName)
-    concatonateFinalVideo(PMV, clips, sampleWidth, sampleHeight, audioclip, file_out, nAttempts = 3)
+        soundStart= 0
+    concatonateFinalVideo(PMV, clips, sampleWidth, sampleHeight, audioclip, file_out, nAttempts = 3, soundStartTime=soundStart, songStartTrim=songStart, songEndTrim=songEnd)
 
     i = 0
     while i < len(videos):

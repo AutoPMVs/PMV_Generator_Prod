@@ -11,9 +11,13 @@ from moviepy.video.fx.fadein import fadein
 from moviepy.video.fx.fadeout import fadeout
 from PMV_Fns.IntroTitle import getIntroVid
 from Classify_Model.ClassifyVideo import getVidClassifiedData
+from PMV_Fns.processMusicFile import inputMusic
+from Cock_Hero_Fns.beatmeterAdder import addBeatMeter
+from pydub import AudioSegment
 from operator import itemgetter
 import pandas as pd
 import random
+
 
 class Video:
     def __init__(self, name, customStart, customEnd, directory):
@@ -21,6 +25,7 @@ class Video:
         self.customStart = customStart
         self.customEnd = customEnd
         self.directory = directory
+
 
 # class VideoSections:
 #     def __init__(self, name, customStart, customEnd, directory):
@@ -35,128 +40,119 @@ def properTitles(row):
     except AttributeError:
         return 0
 
-def reshapeData(data, time_scale):
-    reshaped = np.mean(data[:(len(data)//time_scale)*time_scale].reshape(-1,time_scale), axis=1)
-
-    return reshaped
 
 def getElementDiff(data):
+    #    output=[0]
+    #    i=1
+    #    while i < len(data):
+    #        if data[i]-data[i-1]>50:
+    #            output.append(data[i])
+    #        i=i+1
 
-    
-#    output=[0]
-#    i=1
-#    while i < len(data):
-#        if data[i]-data[i-1]>50:
-#            output.append(data[i])
-#        i=i+1
-    
     differenceList = [abs(x - data[i - 1]) for i, x in enumerate(data)][1:]
 
     return differenceList
 
 
 def getHighValues(reshaped_data, diff_data, sd_scale, nSplits, granularity):
-    output=[0]
-    
+    output = [0]
+
     timeChunks = np.array_split(diff_data, nSplits)
-    j=0
-    
+    j = 0
+
     print('SmallerArrays: ', len(timeChunks))
-    TotalLength=0
-    while j < len(timeChunks):        
-        data=timeChunks[j]
-    
-    
+    TotalLength = 0
+    while j < len(timeChunks):
+        data = timeChunks[j]
+
         max_element = np.amax(data)
         sd_element = np.std(data)
         av_element = np.mean(data)
-        
-        print(max_element, sd_element, av_element, (av_element+1.5*sd_element)/max_element)
-        
-        i=0
-        result=[]
-        while i< len(data):
-            if data[i] >= (av_element+sd_scale*sd_element):
+
+        print(max_element, sd_element, av_element, (av_element + 1.5 * sd_element) / max_element)
+
+        i = 0
+        result = []
+        while i < len(data):
+            if data[i] >= (av_element + sd_scale * sd_element):
                 result.append[i]
-            i=i+1
-        
+            i = i + 1
+
         new_result = result
-        
+
         print(new_result)
-        
-        i=1
+
+        i = 1
         while i < len(new_result):
-            if new_result[i]-new_result[i-1]>0.2/granularity:
-                output.append(new_result[i]+TotalLength)
-            i=i+1
-        
-        TotalLength=TotalLength + len(timeChunks[j])
-        j=j+1
-    
+            if new_result[i] - new_result[i - 1] > 0.2 / granularity:
+                output.append(new_result[i] + TotalLength)
+            i = i + 1
+
+        TotalLength = TotalLength + len(timeChunks[j])
+        j = j + 1
+
     return output
 
+
 def getHighValues2(reshaped_data, diff_data, sd_scale, nSplits, granularity, min_length):
-    output=[0]
-    
+    output = [0]
+
     max_all = np.amax(diff_data)
     sd_all = np.std(diff_data)
-    av_all= np.mean(diff_data)
-    
-    max_all2= np.amax(reshaped_data)
-    sd_all2= np.std(reshaped_data)
+    av_all = np.mean(diff_data)
+
+    max_all2 = np.amax(reshaped_data)
+    sd_all2 = np.std(reshaped_data)
     av_all2 = np.mean(reshaped_data)
-    
-    
+
     timeChunks = np.array_split(diff_data, nSplits)
     timeChunks2 = np.array_split(reshaped_data, nSplits)
-    j=0
-    
+    j = 0
+
     print('SmallerArrays: ', len(timeChunks))
-    TotalLength=0
-    while j < len(timeChunks):        
-        data=timeChunks[j]        
-        data2=timeChunks2[j]
-    
-    
+    TotalLength = 0
+    while j < len(timeChunks):
+        data = timeChunks[j]
+        data2 = timeChunks2[j]
+
         max_element = np.amax(data)
         sd_element = np.std(data)
         av_element = np.mean(data)
-        
+
         max_element2 = np.amax(data2)
         sd_element2 = np.std(data2)
         av_element2 = np.mean(data2)
-        
-        
-#        sd_scale=2-av_element2/max_element2
-        
-#        print(max_element, sd_element, av_element, (av_element+sd_scale*sd_element)/max_element)
-#        print(max_element2, sd_element2, av_element2, 2-av_element2/max_element2)
-        
-        
-        result = np.where(data >= (av_element+sd_scale*sd_element))
-        
+
+        #        sd_scale=2-av_element2/max_element2
+
+        #        print(max_element, sd_element, av_element, (av_element+sd_scale*sd_element)/max_element)
+        #        print(max_element2, sd_element2, av_element2, 2-av_element2/max_element2)
+
+        result = np.where(data >= (av_element + sd_scale * sd_element))
+
         new_result = result[0].tolist()
-        
-#        print(new_result)
-        
-        i=1
-        prevStopped=False
-        prevDif=0
+
+        #        print(new_result)
+
+        i = 1
+        prevStopped = False
+        prevDif = 0
         while i < len(new_result):
-#            print(new_result[i]+TotalLength, prevDif, prevStopped)
-            if new_result[i]-new_result[i-1]>((min_length/granularity)-prevDif):
-                output.append(new_result[i]+TotalLength)
-                prevDif=0
-                prevStopped=False
+            #            print(new_result[i]+TotalLength, prevDif, prevStopped)
+            if new_result[i] - new_result[i - 1] > ((min_length / granularity) - prevDif):
+                output.append(new_result[i] + TotalLength)
+                prevDif = 0
+                prevStopped = False
             else:
-                prevDif=prevDif+(new_result[i]-new_result[i-1])
-                prevStopped=True
-            i=i+1
-        
-        TotalLength=TotalLength + len(timeChunks[j])
-        j=j+1
-    
+                prevDif = prevDif + (new_result[i] - new_result[i - 1])
+                prevStopped = True
+            i = i + 1
+
+        TotalLength = TotalLength + len(timeChunks[j])
+        j = j + 1
+
     return output
+
 
 def checkSwitch(data, max_scale, max_element, sd_element, av_element):
     if data >= max_scale * max_element:
@@ -171,7 +167,8 @@ def videoSplits(audioSplits, videos, videoData, first_data, bitrate, granularity
 
     i = 0
     while i < len(videos):
-        audVidRatio[i] = (videoData[i].customEnd - videoData[i].customStart) / (len(first_data) / (granularity * (bitrate)))
+        audVidRatio[i] = (videoData[i].customEnd - videoData[i].customStart) / (
+                    len(first_data) / (granularity * (bitrate)))
         i = i + 1
     #    splitList=pd.DataFrame(columns = ['startTime', 'endTime', 'deltaTime'])
     print(len(audioSplits))
@@ -189,7 +186,8 @@ def videoSplits(audioSplits, videos, videoData, first_data, bitrate, granularity
                 else:
                     iVid = j
 
-                if i + len(videos) + 1 <= len(audioSplits) or len(videos) >= len(audioSplits) or videoData[iVid].name == origVidName:
+                if i + len(videos) + 1 <= len(audioSplits) or len(videos) >= len(audioSplits) or videoData[
+                    iVid].name == origVidName:
                     print(videoData[iVid].name)  ####If Breaking, uncomment this line to find video with error!!!
                     clipStart = videoData[iVid].customStart + audioSplits[i + j] * audVidRatio[iVid]
                     clipEnd = clipStart + (audioSplits[i + j + 1] - audioSplits[i + j]) * granularity
@@ -210,12 +208,12 @@ def videoSplits(audioSplits, videos, videoData, first_data, bitrate, granularity
 
 
 def getVideoSections(videoDicts, useSectionsBool):
-    vidList=[]
+    vidList = []
     for vid in videoDicts:
         sectionList = []
         for section in vid["Sections"]:
             sectionList.append(vid["Sections"][section])
-        if useSectionsBool==False:
+        if useSectionsBool == False:
             sectionList = [item for sublist in sectionList for item in sublist]
             sectionList = sorted(sectionList, key=itemgetter(0))
             sectionList = [sectionList]
@@ -223,42 +221,49 @@ def getVideoSections(videoDicts, useSectionsBool):
     return vidList
 
 
-def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, granularity, randomise, origVidName, videoDicts):
-
+def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, granularity, randomise, origVidName,
+                                videoDicts, audioAdjustArray, origSoundFromSection):
     audVidRatio = [0] * len(videos)
     clips = []
     i = 0
     print(len(audioSplits))
-    minSectionLength = max(audioSplits)*granularity/25
+    minSectionLength = max(audioSplits) * granularity / 25
     # sectionArray1 = sectionArray[:,0]
-    useSectionsBool=True
+    useSectionsBool = True
     if useSectionsBool:
         sectionArray = getSectionLengthData(videoDicts, useSectionsBool, minSectionLength)
-        audioSections = getAudioSections(audioSplits, sectionArray, songSections)
+        audioSections = getAudioSections(audioSplits, sectionArray, songSections, audioAdjustArray)
         vidSections = getVideoSections(videoDicts, useSectionsBool)
     else:
         sectionArray = getSectionLengthData(videoDicts, useSectionsBool, minSectionLength)
         audioSections = [max(audioSplits)]
         vidSections = getVideoSections(videoDicts, useSectionsBool)
 
-    vidPosition = [0]*len(videos)
-    audioSectionsMusicVid = [audioSections[0] * granularity, audioSections[1] * granularity,
-                            audioSections[2] * granularity, audioSections[3] * granularity]
+    vidPosition = [0] * len(videos)
     for vid in videoData:
-        if vid.name==origVidName:
-            vidSections.append([[[0, audioSectionsMusicVid[0]]], [[audioSectionsMusicVid[0], audioSectionsMusicVid[1]]], [[audioSectionsMusicVid[1], audioSectionsMusicVid[2]]], [[audioSectionsMusicVid[2], audioSectionsMusicVid[3]]]])
+        if vid.name == origVidName:
+            audioSectionsMusicVid = []
+            vidSectionsMusicVid = []
+            for audSect in audioSections:
+                audioSectionsMusicVid.append(audSect * granularity)
+                vidSectionsMusicVid.append([[0, audSect * granularity]])
+
+            vidSections.append(vidSectionsMusicVid)
             audioMusicVid_np = np.array([audioSectionsMusicVid])
             # audioMusicVid_np = audioMusicVid_np.transpose()
             sectionArray = np.concatenate((sectionArray, audioMusicVid_np), axis=0)
             # sectionArray = np.append(sectionArray, audioMusicVid_np)
 
+    if origSoundFromSection == 0:
+        soundStart = 0
+    else:
+        soundStart = audioSections[origSoundFromSection - 1] * granularity
 
-    iAudioSect=0
+    iAudioSect = 0
     while iAudioSect < len(audioSections):
         # print("/////////////////////////////////////")
         # print("/////////////////////////////////////")
         print("//////// Section " + str(iAudioSect) + " /////////")
-
         # print("/////////////////////////////////////")
         # print("/////////////////////////////////////")
         vidSectionPosition = [0] * len(videos)
@@ -268,56 +273,58 @@ def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, gr
         print(selectedVidSections)
         selectedVidSections2 = []
         vidRemoveList = []
-        iVidRemove=0
+        iVidRemove = 0
 
-        iSection=0
+        iSection = 0
         vidStartSections = []
         vidEndSections = []
         while iSection < len(selectedVidSections):
             section = selectedVidSections[iSection]
-            if len(section) > 0 and sectionArray[iSection, iAudioSect]>0:
+            if len(section) > 0 and sectionArray[iSection, iAudioSect] > 0:
                 selectedVidSections2.append(section)
             else:
                 vidRemoveList.append(iSection)
             vidStartSections.append([vidSect[0] for vidSect in section])
             vidEndSections.append([vidSect[1] for vidSect in section])
-            if iAudioSect>0 and iSection<len(videoDicts):
-                audVidRatio[iSection] = (sectionArray[iSection, iAudioSect]) / (audioSections[iAudioSect]-audioSections[iAudioSect-1])
+            if iAudioSect > 0 and iSection < len(videoDicts):
+                audVidRatio[iSection] = (sectionArray[iSection, iAudioSect]) / (
+                            audioSections[iAudioSect] - audioSections[iAudioSect - 1])
             else:
                 audVidRatio[iSection] = (sectionArray[iSection, iAudioSect]) / (audioSections[iAudioSect])
-            iSection=iSection + 1
+            iSection = iSection + 1
 
         # selectedVidSections = selectedVidSections2
         print(len(vidRemoveList))
         print(vidRemoveList)
 
-        if iAudioSect==0:
+        if iAudioSect == 0:
             i = 0
             clipStartOffset = 0
             # print((len(first_data) / (granularity * (bitrate))))
             # print(max(audioSplits))
         else:
-            i = audioSplits.index(audioSections[iAudioSect-1])
+            i = audioSplits.index(audioSections[iAudioSect - 1])
             if i == 0:
                 clipStartOffset = 0
             else:
-                clipStartOffset = audioSplits[i] ###################### ERROR with i-1 #######################
+                clipStartOffset = audioSplits[i]  ###################### ERROR with i-1 #######################
         # print(i, audioSplits.index(audioSections[iAudioSect-1]), audioSplits.index(audioSections[iAudioSect]))
         if len(vidRemoveList) == len(videos):
             print("No Available Videos")
         else:
             deckLast = 0
-            while i <= audioSplits.index(audioSections[iAudioSect]): #len(audioSplits) and audioSplits[i]<=audioSections[iAudioSect]:
+            while i <= audioSplits.index(
+                    audioSections[iAudioSect]):  # len(audioSplits) and audioSplits[i]<=audioSections[iAudioSect]:
                 deck = [k for k in range(len(videos))]
-                deck = [k for k  in deck if k not in vidRemoveList]
-                iAttempt=0
+                deck = [k for k in deck if k not in vidRemoveList]
+                iAttempt = 0
                 random.shuffle(deck)
-                while deckLast == deck[0] and iAttempt<5:
+                while deckLast == deck[0] and iAttempt < 5:
                     random.shuffle(deck)
                     iAttempt = iAttempt + 1
-                deckLast = deck[len(deck)-1]
+                deckLast = deck[len(deck) - 1]
                 j = 0
-                while j < len(deck) and i+j<audioSplits.index(audioSections[iAudioSect]):
+                while j < len(deck) and i + j < audioSplits.index(audioSections[iAudioSect]):
                     # try:
                     if randomise == True:
                         iVid = deck[j]
@@ -326,23 +333,28 @@ def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, gr
                     iOffset = 0
                     if iAudioSect + 1 == len(audioSections):
                         iOffset = 1
-                    if (i + len(deck) + iOffset <= len(audioSplits) or len(deck) >= len(audioSplits)) and videoData[iVid].name != origVidName:
+                    if (i + len(deck) + iOffset <= len(audioSplits) or len(deck) >= len(audioSplits)) and videoData[
+                        iVid].name != origVidName:
                         # print(videoData[iVid].name)  ####If Breaking, uncomment this line to find video with error!!!
                         clipStart = (audioSplits[i + j] - clipStartOffset) * audVidRatio[iVid]
                         clipDiff = (audioSplits[i + j + 1] - audioSplits[i + j]) * granularity
                         clipEnd = clipStart + clipDiff
-                        clipStart, clipEnd = getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections[iVid], vidEndSections[iVid], vidSectionPosition, iVid, False)
-                        print(i + j, i, j, iVid, 'Normal', clipStart, clipEnd, audioSplits[i + j], audioSplits[i + j+1], videoData[iVid].name)
+                        clipStart, clipEnd = getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections[iVid],
+                                                                vidEndSections[iVid], vidSectionPosition, iVid, False)
+                        print(i + j, i, j, iVid, 'Normal', clipStart, clipEnd, audioSplits[i + j],
+                              audioSplits[i + j + 1], videoData[iVid].name)
                     elif videoData[iVid].name == origVidName:
                         clipStart = videoData[iVid].customStart + audioSplits[i + j] * audVidRatio[iVid]
                         clipEnd = clipStart + (audioSplits[i + j + 1] - audioSplits[i + j]) * granularity
-                        print(i + j, i, j, iVid, 'Music Vid', clipStart, clipEnd, audioSplits[i + j], audioSplits[i + j+1], videoData[iVid].name)
+                        print(i + j, i, j, iVid, 'Music Vid', clipStart, clipEnd, audioSplits[i + j],
+                              audioSplits[i + j + 1], videoData[iVid].name)
                     else:
                         try:
                             clipDiff = (audioSplits[i + j + 1] - audioSplits[i + j]) * granularity
-                            clipEnd = vidEndSections[iVid][len(vidEndSections[iVid])-1]
+                            clipEnd = vidEndSections[iVid][len(vidEndSections[iVid]) - 1]
                             clipStart = clipEnd - clipDiff
-                            print(i + j, i, j, iVid, 'Final', clipStart, clipEnd, audioSplits[i + j], audioSplits[i + j+1], videoData[iVid].name)
+                            print(i + j, i, j, iVid, 'Final', clipStart, clipEnd, audioSplits[i + j],
+                                  audioSplits[i + j + 1], videoData[iVid].name)
                         except IndexError:
                             print('End')
                             pass
@@ -356,15 +368,16 @@ def videoSplitsUseClassifyModel(audioSplits, videos, videoData, songSections, gr
         iAudioSect = iAudioSect + 1
 
     print(max(audioSplits))
-    TotalDuration=0
+    TotalDuration = 0
     for iclip, clip in enumerate(clips):
         TotalDuration = TotalDuration + clip.duration
         print(iclip, " ", ntpath.basename(clip.filename), " ", clip.duration)
     print('length: ', len(clips), 'duration: ', TotalDuration)
-    return (clips)
+    return (clips), soundStart
 
-def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSections, vidSectionPosition, iVid, finalClip):
 
+def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSections, vidSectionPosition, iVid,
+                       finalClip):
     vidDiffSections = []
     iElem = 0
     while iElem < len(vidEndSections):
@@ -375,12 +388,12 @@ def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSec
     iSection = 0
     selectedSection = iSection
     while iSection < len(vidDiffSections):
-        if clipStart >= vidCumDiffSections[iSection] and clipStart <= vidCumDiffSections[iSection+1]:
+        if clipStart >= vidCumDiffSections[iSection] and clipStart <= vidCumDiffSections[iSection + 1]:
             selectedSection = iSection
         iSection = iSection + 1
     if selectedSection >= len(vidEndSections):
         # print(selectedSection)
-        selectedSection=len(vidEndSections)-1
+        selectedSection = len(vidEndSections) - 1
     clipOffset = clipStart - vidCumDiffSections[selectedSection]
     clipStartInit = clipStart
     clipEndInit = clipEnd
@@ -388,10 +401,10 @@ def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSec
     clipEnd = clipStart + clipDiff
     clipStartSaved = clipStart
     clipEndSaved = clipEnd
-    if finalClip==False:
+    if finalClip == False:
         if clipEnd > vidEndSections[selectedSection]:
             # if clipDiff<3 and iVid==0:
-                # print("WTF?")
+            # print("WTF?")
             iAttempt = selectedSection + 1
             while iAttempt < min(selectedSection + 5, len(vidDiffSections)):
                 sectStart = vidStartSections[iAttempt]
@@ -402,14 +415,14 @@ def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSec
                     clipEnd = clipStart + clipDiff
                     break
                 else:
-                    clipStart = sectStart + (random.randint(0,int(sectDiff/2))/10)
+                    clipStart = sectStart + (random.randint(0, int(sectDiff / 2)) / 10)
                     clipEnd = clipStart + clipDiff
                     if clipStart >= sectStart and clipEnd <= sectEnd:
                         break
                 # print(iAttempt)
                 iAttempt = iAttempt + 1
             # print(iAttempt)
-            if iAttempt==min(selectedSection + 5, len(vidDiffSections)):
+            if iAttempt == min(selectedSection + 5, len(vidDiffSections)):
                 iAttempt = selectedSection - 1
                 while iAttempt > max(selectedSection - 5, 0):
                     sectStart = vidStartSections[iAttempt]
@@ -439,144 +452,153 @@ def getNewClipStartEnd(clipStart, clipEnd, clipDiff, vidStartSections, vidEndSec
     #         if clipStart < vidStartSections[vidSectionPosition[len(vidSectionPosition)]] and clipEnd > vidEndSections[vidSectionPosition[len(vidSectionPosition)]]:
     #             clipEnd = vidStartSections[vidSectionPosition[len(vidSectionPosition)]]
     #             clipStart = clipEnd - clipDiff
-    if len(vidStartSections)==1:
-        if clipStart<vidStartSections[0] or clipEnd>vidEndSections[0]:
+    if len(vidStartSections) == 1:
+        if clipStart < vidStartSections[0] or clipEnd > vidEndSections[0]:
             clipStart = vidStartSections[0]
             clipEnd = vidStartSections[0] + clipDiff
-        if clipStart<vidStartSections[0] or clipEnd>vidEndSections[0]:
+        if clipStart < vidStartSections[0] or clipEnd > vidEndSections[0]:
             clipEnd = vidEndSections[0]
             clipStart = vidEndSections[0] - clipDiff
 
     return clipStart, clipEnd
 
-def getAudioSections(audioSplits, sectionArray, songSections):
+
+def getAudioSections(audioSplits, sectionArray, songSections, audioAdjustArray):
     musicLength = max(audioSplits)
     print(musicLength)
 
     sectionArraySumsAdjusted = []
-    sectionArraySumsAdjusted.append(sectionArray[:, 0].sum()*1.5)
-    sectionArraySumsAdjusted.append(sectionArray[:, 1].sum()*2)
-    sectionArraySumsAdjusted.append(sectionArray[:, 2].sum()*2)
-    sectionArraySumsAdjusted.append(sectionArray[:, 3].sum())
+    iSection = 0
+    while iSection < sectionArray.shape[1]:
+        sectionArraySumsAdjusted.append(sectionArray[:, iSection].sum() * audioAdjustArray[iSection])
+        iSection = iSection + 1
+    # sectionArraySumsAdjusted.append(sectionArray[:, 1].sum()*audioAdjustArray[1])
+    # sectionArraySumsAdjusted.append(sectionArray[:, 2].sum()*audioAdjustArray[2])
+    # sectionArraySumsAdjusted.append(sectionArray[:, 3].sum()*audioAdjustArray[3])
 
     origLength = sectionArray.sum()
     vidLength = sum(sectionArraySumsAdjusted)
 
-    sectionArraySumsAdjusted = [i*origLength/vidLength for i in sectionArraySumsAdjusted]
+    sectionArraySumsAdjusted = [i * origLength / vidLength for i in sectionArraySumsAdjusted]
 
-    iSection=0
+    iSection = 0
     audioSection = []
     ratioTotal = 0
     missingIndexes = []
     while iSection < sectionArray.shape[1]:
-        sectionRatio = sectionArraySumsAdjusted[iSection]/origLength
+        sectionRatio = sectionArraySumsAdjusted[iSection] / origLength
         ratioTotal = ratioTotal + sectionRatio
-        audioValue = round(musicLength * ratioTotal,0)
+        audioValue = round(musicLength * ratioTotal, 0)
         audioLstValue = min(audioSplits, key=lambda x: abs(x - audioValue))
-        if audioLstValue == max(audioSplits) and iSection < sectionArray.shape[1]-1:
-            audioLstValue = audioSplits[len(audioSplits)-2]
-        print(sectionRatio, ratioTotal, round(musicLength * ratioTotal,0), audioLstValue)
-        if iSection==0 or len(audioSection)==0:
+        if audioLstValue == max(audioSplits) and iSection < sectionArray.shape[1] - 1:
+            audioLstValue = audioSplits[len(audioSplits) - 2]
+        print(sectionRatio, ratioTotal, round(musicLength * ratioTotal, 0), audioLstValue)
+        if iSection == 0 or len(audioSection) == 0:
             audioSectionDiff = audioLstValue - 0
         else:
             audioSectionDiff = audioLstValue - audioSection[-1]
-        if audioSectionDiff!=0:
+        if audioSectionDiff != 0:
             audioSection.append(audioLstValue)
         else:
             missingIndexes.append(iSection)
 
         iSection = iSection + 1
 
-
     audioSectionFinal = []
     audioSectionRanges = []
     audioSectionForRange = [0] + audioSection
     iSection = 1
-    while iSection < len(audioSectionForRange)-1:
-        if iSection < len(audioSectionForRange)-2:
-            downDiff = (audioSectionForRange[iSection] - audioSectionForRange[iSection-1])/3
-            upDiff = (audioSectionForRange[iSection+ 1] - audioSectionForRange[iSection])/3
+    while iSection < len(audioSectionForRange) - 1:
+        if iSection < len(audioSectionForRange) - 2:
+            downDiff = (audioSectionForRange[iSection] - audioSectionForRange[iSection - 1]) / 3
+            upDiff = (audioSectionForRange[iSection + 1] - audioSectionForRange[iSection]) / 3
         else:
-            downDiff = (audioSectionForRange[iSection] - audioSectionForRange[iSection-1])/8
-            upDiff = (audioSectionForRange[iSection+ 1] - audioSectionForRange[iSection])/2
-        if audioSectionForRange[iSection-1]==audioSectionForRange[iSection]:
+            downDiff = (audioSectionForRange[iSection] - audioSectionForRange[iSection - 1]) / 8
+            upDiff = (audioSectionForRange[iSection + 1] - audioSectionForRange[iSection]) / 2
+        if audioSectionForRange[iSection - 1] == audioSectionForRange[iSection]:
             downDiff = 0
             upDiff = 0
-        audioSectionRanges.append([audioSection[iSection-1] - downDiff, audioSection[iSection-1] + upDiff])
+        audioSectionRanges.append([audioSection[iSection - 1] - downDiff, audioSection[iSection - 1] + upDiff])
         iSection = iSection + 1
 
-    audioSectionRanges.append([audioSection[len(audioSection)-1], audioSection[len(audioSection)-1]])
+    audioSectionRanges.append([audioSection[len(audioSection) - 1], audioSection[len(audioSection) - 1]])
 
     for iSection, section in enumerate(audioSection):
         nearestSection = find_nearest(songSections, section)
-        if nearestSection>audioSectionRanges[iSection][0] and nearestSection<audioSectionRanges[iSection][1]:
+        if nearestSection > audioSectionRanges[iSection][0] and nearestSection < audioSectionRanges[iSection][1]:
             finalSection = find_nearest(audioSplits, nearestSection)
             audioSectionFinal.append(finalSection)
         else:
             audioSectionFinal.append(section)
 
     iSection = 0
-    while iSection < len(audioSectionFinal)-1:
-        if audioSectionFinal[iSection]>=audioSectionFinal[iSection+1] and audioSection[iSection]!=audioSection[iSection+1]:
+    while iSection < len(audioSectionFinal) - 1:
+        if audioSectionFinal[iSection] >= audioSectionFinal[iSection + 1] and audioSection[iSection] != audioSection[
+            iSection + 1]:
             audioSectionFinal[iSection] = audioSection[iSection]
         iSection = iSection + 1
     iSection = 0
     while iSection < len(audioSectionFinal):
-        if audioSectionFinal[iSection]<audioSectionFinal[iSection-1]:
+        if audioSectionFinal[iSection] < audioSectionFinal[iSection - 1]:
             audioSectionFinal[iSection] = audioSection[iSection]
         iSection = iSection + 1
 
     for index in missingIndexes:
-        if index==0:
+        if index == 0:
             audioSectionFinal.insert(index, 0)
         else:
-            audioSectionFinal.insert(index, audioSectionFinal[index-1])
+            audioSectionFinal.insert(index, audioSectionFinal[index - 1])
 
     return audioSectionFinal
+
 
 def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return array[idx]
 
-def getSectionLengthData(videoDicts, useSectionsBool, minSectionLength):
 
+def getSectionLengthData(videoDicts, useSectionsBool, minSectionLength):
     categories = []
-    sectionLengths=[]
+    sectionLengths = []
     for vidDict in videoDicts:
         sections_list = vidDict["Sections"]
         sectionLength = getSectionLengths(sections_list, minSectionLength)
         sectionLengths.append(sectionLength)
     sectionArray = np.array(sectionLengths)
 
-    if useSectionsBool==False:
+    if useSectionsBool == False:
         sectionArray = sectionArray.sum(axis=1)
         sectionArray = sectionArray.reshape(sectionArray.shape[0], -1)
 
     iSection = 0
     while iSection < sectionArray.shape[1]:
         iAudioSect = 0
-        columnArray = sectionArray[ : ,iSection]
+        columnArray = sectionArray[:, iSection]
         columnArrayCount = np.count_nonzero(columnArray)
-        if columnArrayCount<2 and sectionArray.shape[0]>2:
+        if columnArrayCount < 2 and sectionArray.shape[0] > 2:
             while iAudioSect < sectionArray.shape[0]:
-                sectionArray[iAudioSect, iSection]=0
+                sectionArray[iAudioSect, iSection] = 0
                 iAudioSect = iAudioSect + 1
         iSection = iSection + 1
 
     print(categories)
     return sectionArray
 
+
 def getSectionLengths(sections_list, minSectionLength):
-    lengthList = [] # np.array()
+    lengthList = []  # np.array()
     for iSection, section in enumerate(sections_list):
         totalLength = 0
         for clip in sections_list[section]:
-            totalLength = totalLength + clip[1]-clip[0]
-        if ((totalLength<minSectionLength or (len(sections_list[section])<3) and totalLength<minSectionLength*2)) and iSection != len(sections_list)-1:
+            totalLength = totalLength + clip[1] - clip[0]
+        if ((totalLength < minSectionLength or (
+                len(sections_list[section]) < 3) and totalLength < minSectionLength * 2)) and iSection != len(
+                sections_list) - 1:
             totalLength = 0
         lengthList.append(totalLength)
     return lengthList
+
 
 def getVideoData(PMV, df_Videos_All, allVideoDict):
     videosIn = list()
@@ -588,21 +610,33 @@ def getVideoData(PMV, df_Videos_All, allVideoDict):
                 if iVids < 120:
                     videosIn.append(f)
                     if PMV.Configuration.UseClassifyModel:
-                        videoDicts.append(getVidClassifiedData(PMV.DirectoryFile_Info.vidDownloadDir + "/" + f, allVideoDict, modelStoragePath = PMV.DirectoryFile_Info.ModelStorageDir, df_Videos_All=df_Videos_All))
+                        try:
+                            vidDict = getVidClassifiedData(PMV.DirectoryFile_Info.vidDownloadDir + "/" + f,
+                                                           allVideoDict,
+                                                           modelStoragePath=PMV.DirectoryFile_Info.ModelStorageDir,
+                                                           df_Videos_All=df_Videos_All)
+                        except ValueError:
+                            vidDict = getVidClassifiedData(PMV.DirectoryFile_Info.vidDownloadDir + "/" + f,
+                                                           allVideoDict,
+                                                           modelStoragePath=PMV.DirectoryFile_Info.ModelStorageDir,
+                                                           df_Videos_All=df_Videos_All, reImage=True)
+                        videoDicts.append(vidDict)
 
                 iVids = iVids + 1
-
 
     videoData = list()
     for i, vid in enumerate(videosIn):
         if PMV.Configuration.UseClassifyModel:
             try:
-                videoData.append(Video(name=vid, customStart=videoDicts[i]["StartEndTimes"][0], customEnd=videoDicts[i]["StartEndTimes"][1], directory=PMV.DirectoryFile_Info.vidDownloadDir))
+                videoData.append(Video(name=vid, customStart=videoDicts[i]["StartEndTimes"][0],
+                                       customEnd=videoDicts[i]["StartEndTimes"][1],
+                                       directory=PMV.DirectoryFile_Info.vidDownloadDir))
             except:
                 print(vid)
                 pass
         else:
-            videoData.append(Video(name=vid, customStart=0, customEnd=0, directory=PMV.DirectoryFile_Info.vidDownloadDir))
+            videoData.append(
+                Video(name=vid, customStart=0, customEnd=0, directory=PMV.DirectoryFile_Info.vidDownloadDir))
         print(vid)
 
     nInVids = len(videosIn)
@@ -610,26 +644,34 @@ def getVideoData(PMV, df_Videos_All, allVideoDict):
     origVidName = PMV.Music_Info.musicName + ".mp4"
     if PMV.Music_Info.musicVideoBool == True:
         while iOrig <= nInVids * PMV.Music_Info.musicVideoOccuranceFactor:
-            videoData.append(Video(name=origVidName, customStart=0, customEnd=0, directory=PMV.DirectoryFile_Info.musicVidDir))
+            videoData.append(
+                Video(name=origVidName, customStart=0, customEnd=0, directory=PMV.DirectoryFile_Info.musicVidDir))
             iOrig = iOrig + 1
 
     return videoData, origVidName, videoDicts
-        
-def processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_videos_filtered): #, originalVidBool, df_videos_filtered, defaultStartTime, defaultEndTime):
+
+
+def processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName,
+                     df_videos_filtered):  # , originalVidBool, df_videos_filtered, defaultStartTime, defaultEndTime):
     nVideos = len(videoData)
     videos = [0] * nVideos
 
     i = 0
+    maxAudio = 0
+    vidAudioMeanList = []
     while i < nVideos:
         if PMV.Configuration.resize == True:
-            vidTemp = VideoFileClip(videoData[i].directory + videoData[i].name).resize(width = sampleWidth) #(sampleWidth, sampleHeight))
+            vidTemp = VideoFileClip(videoData[i].directory + videoData[i].name).resize(
+                width=sampleWidth)  # (sampleWidth, sampleHeight))
             if PMV.Configuration.flipBool == True and videoData[i].name != origVidName:
-                vidTemp2 = mirror_x(vidTemp)
-            else:
-                vidTemp2 = vidTemp
-            videos[i] = vidTemp2
+                vidTemp = mirror_x(vidTemp)
         else:
-            videos[i] = VideoFileClip(PMV.DirectoryFile_Info.vidDownloadDir + videoData[i].name)
+            vidTemp = VideoFileClip(PMV.DirectoryFile_Info.vidDownloadDir + videoData[i].name)
+
+        if videoData[i].name == origVidName:
+            vidTemp = vidTemp.volumex(0)
+
+        videos[i] = vidTemp
 
         print('name', 'duration', 'customStart', 'customEnd')
 
@@ -640,13 +682,14 @@ def processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_
             else:
                 videoData[i].customEnd = videos[i].duration
                 videoData[i].customStart = 0  #
-            print(videoData[i].name, videos[i].duration, videoData[i].customStart, videoData[i].customEnd, 'Original Video')
+            print(videoData[i].name, videos[i].duration, videoData[i].customStart, videoData[i].customEnd,
+                  'Original Video')
         else:
             videoName = str.title(videoData[i].name[:-4])  # + " - Pornhub.com")
             df_videos_filtered['Title Proper'] = df_videos_filtered.apply(lambda row: properTitles(row), axis=1)
             csvVideoInfo = df_videos_filtered.loc[df_videos_filtered['Title Proper'] == videoName]
             csvVideoInfo = csvVideoInfo.reset_index()
-            if PMV.Configuration.UseClassifyModel==True:
+            if PMV.Configuration.UseClassifyModel == True:
                 videoData[i].customEnd = videos[i].duration
                 videoData[i].customStart = 0
             else:
@@ -664,10 +707,56 @@ def processVideoData(PMV, videoData, sampleWidth, sampleHeight, origVidName, df_
 
             print(videoData[i].name, videos[i].duration, videoData[i].customStart, videoData[i].customEnd)
 
+        # sound = AudioSegment.from_file(PMV.DirectoryFile_Info.vidDownloadDir + videoData[i].name, 'mp4')
+        #
+        # sound_data = sound._data
+        # first_data = np.fromstring(sound_data, dtype=np.int16)
+        # raw_data = np.absolute(first_data)
+        # print(len(first_data), len(raw_data))
+
+        # sound = vidTemp.audio#.to_soundarray()
+
+        if videoData[i].name != origVidName:
+            sound = AudioSegment.from_file(PMV.DirectoryFile_Info.vidDownloadDir + videoData[i].name, 'mp4')
+
+            sound_data = sound._data
+            first_data = np.fromstring(sound_data, dtype=np.int16)
+            raw_data = np.absolute(first_data)
+            print(len(first_data), len(raw_data))
+
+            vidAudioMean = raw_data.mean()
+            if vidAudioMean > maxAudio:
+                maxAudio = vidAudioMean
+        else:
+            vidAudioMean = 0
+        vidAudioMeanList.append(vidAudioMean)
+
         i = i + 1
+    normaliseSound = True
+    if normaliseSound:
+        videosnew = []
+        iVid = 0
+        while iVid < len(videos):
+            if vidAudioMeanList[iVid] > 0:
+                audioRatio = maxAudio / vidAudioMeanList[iVid]
+                videosnew.append(videos[iVid].volumex(audioRatio))
+            else:
+                videosnew.append(videos[iVid].volumex(0))
+            iVid = iVid + 1
+        videos = videosnew
+
     return videos, videoData
 
-def concatonateFinalVideo(PMV, clips, sampleWidth, sampleHeight, audioclip, file_out, nAttempts=3):
+
+def add_black_box(frame, top, bottom, left, right):
+    """Blacken a rectangular zone of the frame"""
+    # change (top, bottom, left, right) to your coordinates
+    frame[top: bottom, left: right] = 0
+    return frame
+
+
+def concatonateFinalVideo(PMV, clips, sampleWidth, sampleHeight, audioclip, file_out, nAttempts=3, soundStartTime=0,
+                          songStartTrim=0, songEndTrim=0):
     for attempt in range(nAttempts):
         try:
 
@@ -675,30 +764,56 @@ def concatonateFinalVideo(PMV, clips, sampleWidth, sampleHeight, audioclip, file
             finalVideo = concatenate_videoclips(clips, method='compose')
             if PMV.Configuration.cropVidBool == True:
                 (w, h) = finalVideo.size
-                print(PMV.Configuration.cropVidFraction, int(sampleHeight * PMV.Configuration.cropVidFraction), int((1 - PMV.Configuration.cropVidFraction) * sampleHeight), w, h)
-                finalVideo = finalVideo.crop(height=int(round((1 - PMV.Configuration.cropVidFraction*2) * sampleHeight, 0)), width = w, x_center=w/2, y_center=h/2)
+                print(PMV.Configuration.cropVidFraction, int(sampleHeight * PMV.Configuration.cropVidFraction),
+                      int((1 - PMV.Configuration.cropVidFraction) * sampleHeight), w, h)
+                boxHeight = int(sampleHeight * PMV.Configuration.cropVidFraction)
+                finalVideo = finalVideo.fl_image(
+                    lambda frame: add_black_box(frame, top=h - boxHeight, bottom=h, left=0, right=w))
+                finalVideo = finalVideo.fl_image(
+                    lambda frame: add_black_box(frame, top=0, bottom=boxHeight, left=0, right=w))
 
             print('stage 2')
-            finalVideo.volumex(0)
+
+            if PMV.Music_Info.origSoundScale > 0:
+                startTime = soundStartTime
+                endTime = finalVideo.duration
+                print(startTime, endTime, endTime - startTime)
+                finalAudio = CompositeAudioClip([finalVideo.subclip(startTime, endTime).audio.volumex(
+                    PMV.Music_Info.origSoundScale).set_start(startTime).set_duration(endTime - startTime),
+                                                 audioclip.volumex(1)])
+                finalVideo2 = finalVideo.set_audio(finalAudio)
+            else:
+                finalVideo.volumex(0)
+                finalVideo2 = finalVideo.set_audio(audioclip)
 
             print('stage 3')
-
-            # final_audio = CompositeAudioClip([finalVideo.audio.afx(volumex, 2), audioclip.afx(volumex, 0.5)])
-            finalVideo2 = finalVideo.set_audio(audioclip)
-
-            print('stage 4')
             finalVideo2a = fadeout(finalVideo2, 1, final_color=None)
             finalVideo2c = fadein(finalVideo2a, 1, initial_color=None)
 
+            if PMV.CH_Settings.make_CH_Vid:
+                mp3_dir = PMV.DirectoryFile_Info.musicDir + PMV.Music_Info.musicName + '.mp4'
+                reshaped_data, first_data, audioclip, ratio, bitrate, songStart, songEnd, songSections = inputMusic(
+                    mp3_dir, songStart=songStartTrim, songEnd=songEndTrim, granularity=PMV.Configuration.granularity,
+                    plotCharts=False, nSections=PMV.CH_Settings.nSections, requiredDiff=PMV.CH_Settings.requiredDiff,
+                    minSections=PMV.CH_Settings.minSections)
+                finalVideo2c = addBeatMeter(finalVideo2c, songSections, reshaped_data, mp3_dir,
+                                            PMV.Configuration.granularity, PMV.CH_Settings.beatSelect,
+                                            cropMusicStart=songStartTrim, cropMusicDuration=songEndTrim - songStartTrim,
+                                            animationDuration=PMV.CH_Settings.animationDuration,
+                                            sdfactor=PMV.CH_Settings.sdfactor, yPosScale=PMV.CH_Settings.yPosScale,
+                                            useRankMethod=PMV.CH_Settings.useRankMethod,
+                                            rollingSections=int(PMV.CH_Settings.rollingSections),
+                                            circleSizeScale=PMV.CH_Settings.circleSizeScale,
+                                            beatEndPosScale=PMV.CH_Settings.beatEndPosScale)
+
             if PMV.Configuration.addIntro:
-                introVideo = getIntroVid(PMV.DirectoryFile_Info.finalVidName, PMV.Configuration.cropVidFraction, sampleHeight,
-                                         PMV.DirectoryFile_Info.introVidDir, PMV.Configuration.userName)
+                introVideo = getIntroVid(PMV.DirectoryFile_Info.finalVidName, PMV.Configuration.cropVidFraction,
+                                         sampleHeight, PMV.DirectoryFile_Info.introVidDir, PMV.Configuration.userName)
                 finalVideo3 = concatenate_videoclips([introVideo, finalVideo2c], method='compose')
             else:
                 finalVideo3 = finalVideo2c
 
             print('stage 4')
-            print('stage 5')
 
             finalVideo3.write_videofile(file_out, threads=4, fps=30)
         except OSError as OSErrorMessage:

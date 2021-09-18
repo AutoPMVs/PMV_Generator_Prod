@@ -7,7 +7,7 @@ def DataFrameToDict(df_profiles, profile, currentDir):
     d_select = d[profile]
     for entry in d_select:
         if "Path" in entry:
-            if d_select[entry][0:2] != currentDir[0:2]:
+            if d_select[entry][0:2] != currentDir[0:2] and r":" not in d_select[entry][0:2]:
                 d_select[entry] = currentDir + "/" + d_select[entry]
     return d_select
 

@@ -136,6 +136,10 @@ def getProxyChannel(proxyChannels, title, categories):
 
 
 def makePornstarList(videoList, publishNewList):
+
+    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'cum', 'anal', 'milf', 'wife', 'bedroom', 'big ass', 'cuckold',
+                        'sharing', 'big tits', 'cheating', 'watching', 'housewife', 'nan', '0', 'Bbc', 'Jordan']
+
     countPornstars = videoList[['_Pornstar1', '_Pornstar2', '_Pornstar3', '_Pornstar4', '_Pornstar5']].apply(pd.Series.value_counts)
     countPornstars['Total'] = countPornstars.sum(axis=1)
     uniqPornstars = pd.unique(countPornstars.index.values.ravel('K'))
@@ -143,6 +147,9 @@ def makePornstarList(videoList, publishNewList):
     df_Pornstar = pd.read_csv(PathList["PornstarListPath"])
     df_Pornstar['Pornstar'] = df_Pornstar['Pornstar'].fillna("")
     pornstarListStart = df_Pornstar["Pornstar"].to_list()
+
+    for remPS in removePS_strings:
+        pornstarListStart = [str(ps) for ps in pornstarListStart if str(ps) != remPS]
 
     pornstarListStart = [str.title(ps) for ps in pornstarListStart]
     uniqPornstars = uniqPornstars.tolist()
@@ -155,8 +162,6 @@ def makePornstarList(videoList, publishNewList):
     listPornstar = list(dict.fromkeys(listPornstar))
     print(len(uniqPornstars))
 
-    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'cum', 'anal', 'milf', 'wife', 'bedroom', 'big ass', 'cuckold',
-                        'sharing', 'big tits', 'cheating', 'watching', 'housewife', 'nan', '0']
     for remPS in removePS_strings:
         listPornstar = [str(ps) for ps in listPornstar if str(ps) != remPS]
 

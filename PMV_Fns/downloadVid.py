@@ -29,17 +29,23 @@ ydl_opts = {'outtmpl': selectDir + '%(title)s' + '.mp4', # .%(ext)s',
 iAttempt=0
 if line=="":
     iAttempt=6
+print("Downloading Video")
 while iAttempt < 6:
+    print(iAttempt)
     if iAttempt < 3:
         try:
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([line])
             break
         except Exception as e:
-            print(line, "Error: ", iAttempt)
+            # print(line, "Error: ", iAttempt)
             if "requested format not available" in str(e):
                 iAttempt = 2
-            pass
+                pass
+            elif "PermissionError: [WinError 32]" in str(e):
+                break
+            else:
+                pass
     if iAttempt >= 3:
         try:
             ydl_opts = {'outtmpl': selectDir + '%(title)s' + '.mp4',  # .%(ext)s',
@@ -48,12 +54,16 @@ while iAttempt < 6:
                         'playlist': 'no',
                         'verbose': 'false',
                         'add_header': 'false'}
-            print(line, "Error: ", iAttempt)
+            # print(line, "Error: ", iAttempt)
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([line])
             break
-        except:
-            print(line, "Error: ", iAttempt)
+        except Exception as e:
+            # print(line, "Error: ", iAttempt)
+            if "PermissionError: [WinError 32]" in str(e):
+                break
+            else:
+                pass
             pass
     iAttempt = iAttempt + 1
     # elif iAttempt == 4:

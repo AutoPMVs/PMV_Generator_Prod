@@ -1,4 +1,5 @@
 # import pickle
+import copy
 import shutil
 import _pickle as pickle
 import time
@@ -15,6 +16,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import pytesseract
+# Import everything needed to edit video clips
+from moviepy.editor import *
+
+
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract'
 # from Admin_Fns.allPaths import PathList
 
@@ -34,21 +39,36 @@ def get_Category_Scores(name, model, mean_image, imageFolder):
     results = preds[0].tolist()
     return results
 
+def get_fps_ffmpeg(source_name):
+    # loading video dsa gfg intro video
+    clip = VideoFileClip(source_name).subclip(0, 10)
+    # getting frame rate of the clip
+    rate = clip.fps
+    # printing the fps
+    return rate
+
 def ExtractFrames(InputVid, outDir):
     vidcap = cv2.VideoCapture(InputVid)
     frameLength = round(vidcap.get(cv2.CAP_PROP_FRAME_COUNT),0)
-    fps = round(vidcap.get(cv2.CAP_PROP_FPS),0)
+    fps = vidcap.get(cv2.CAP_PROP_FPS)
+    if fps == 0:
+        fps = get_fps_ffmpeg(InputVid)
     print(frameLength, fps)
     success, image = vidcap.read()
     count = 0
     nFrames = fps
     nImage=0
+    prevValue = 0
     while success:
-        if count % nFrames == 0:
+        # print(count, round(count % nFrames,0))
+        fpsExtract = round(fps,0)-1
+        if prevValue==fpsExtract or count==0:
+            # print("Extracted")
             status = cv2.imwrite(outDir + "/" + str(nImage) + ".jpg", image)
-            if count % (nFrames*100) == 0:
+            if round(count % (nFrames*100),0) == 0:
                 print('Frame: ' + str(count) + "\t out of \t" + str(frameLength) + "\t", success, status)
             nImage=nImage+1
+        prevValue = round(count % nFrames,0)
         count += 1  # save frame as JPEG file
         success, image = vidcap.read()
 
@@ -93,21 +113,49 @@ def process(file, mean_image):
 def getImageSize(inputImage):
     img = cv2.imread(inputImage)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 5, 255, cv2.THRESH_BINARY)
+    color = int(gray[0:5, 0:5].mean())
+    color = min(color, 20)
+    _, thresh = cv2.threshold(gray, color+1, 255, cv2.THRESH_BINARY)
 
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     try:
-        cnt = contours[0]
+        # find the biggest countour by the area
+        cnt = max(contours, key = cv2.contourArea)
     except:
         print(inputImage)
-        return(0,0,0,0)
+        return (0, 0, 0, 0)
     x, y, w, h = cv2.boundingRect(cnt)
+    # print(x, y, w, h)
+    height, width = img.shape[:2]
+    newWidth = w
+    actWidth = width
+    newHeight = h
+    actHeight = height
 
-    crop = img[y:y + h, x:x + w]
-    return x, y, w, h
+    # # draw contours
+    # ctr = copy.copy(img)
+    # cv2.rectangle(ctr, (x, y), (x + w, y + h), (0, 255, 0), 5)
+    # # display results with matplotlib
+    # # original
+    # original = img[:, :, ::-1]  # flip color for maptolib display
+    # plt.subplot(221), plt.imshow(original)
+    # plt.title('Original Image'), plt.xticks([]), plt.yticks([])
+    # # Threshold
+    # plt.subplot(222), plt.imshow(thresh, cmap='gray')
+    # plt.title('threshold binary'), plt.xticks([]), plt.yticks([])
+    # # draw contours
+    # # selected area for future crop
+    # ctr = ctr[:, :, ::-1]  # flip color for maptolib display
+    # plt.subplot(223), plt.imshow(ctr)
+    # plt.title('Selected area'), plt.xticks([]), plt.yticks([])
+    # plt.show()
 
-def processImages(imageFolder, modelStoragePath, existingFrameList=[]):
+    return (newWidth, actWidth, newHeight, actHeight)
+
+def processImages(imageFolder, modelStoragePath, existingFrameList=[], findSizes=False):
     time1 = datetime.datetime.now()
+    print(findSizes)
 
     if modelStoragePath == "":
         weightPath = r'model/weights.h5'
@@ -124,40 +172,56 @@ def processImages(imageFolder, modelStoragePath, existingFrameList=[]):
 
     model = tf.keras.models.load_model(weightPath)
     mean_image = np.load(meanImagePath)
+    imageSizeList = []
 
     if len(existingFrameList)>0:
         frameList = existingFrameList
     else:
         frameList=[]
         for i, image in enumerate(lst):
-            if i < 100000:
+            if i < 100000: #and i>119:
                 results = get_Category_Scores(image, model, mean_image, imageFolder)
                 if i>1:
                     s, m = inputCompareImages(directory + "/" + image, directory + "/" + lst[i - 1])
                 else:
                     s=1
                     m=0
+                if findSizes:
+                    newWidth, actWidth, newHeight, actHeight = getImageSize(directory + "/" + image)
+                    if abs(newWidth)<actWidth*0.6 and abs(newHeight)>0.95*actHeight:
+                        # s=1
+                        m=0
+                    print(image, "\t", newWidth, "\t", actWidth, "\t", newHeight, "\t", actHeight, "\t", m)
+                    imageSizeList.append(abs(newWidth))
+
+
                 frameInfo = [m, s, round(results[0], 3), round(results[1], 3), round(results[2], 3), round(results[3], 3), round(results[4], 3), round(results[5], 3)]
+                # print(image, frameInfo)
                 frameList.append(frameInfo)
 
     time2 = datetime.datetime.now()
     print("Image Process Time: \t", time2 - time1)
     return frameList
 
-def calculateSceneChanges(df_Video):
+def calculateMSEcutoff(df_Video):
     list_MSE = df_Video["MSE"].to_list()
 
     try:
         sd_MSE = statistics.stdev(list_MSE)
     except:
-        print(df_Video)
-        print(list_MSE)
+        # print(df_Video)
+        # print(list_MSE)
         pass
     max_MSE = max(list_MSE)
     mean_MSE = sum(list_MSE) / len(list_MSE)
 
     cutoff_MSE = (mean_MSE + sd_MSE*0.7) / max_MSE
-    print('cutoff_MSE', cutoff_MSE)
+    # print('cutoff_MSE', cutoff_MSE)
+
+    return max_MSE, cutoff_MSE
+
+def calculateSceneChanges(df_Video):
+    max_MSE, cutoff_MSE = calculateMSEcutoff(df_Video)
 
     scene_change_list = []
 
@@ -166,7 +230,7 @@ def calculateSceneChanges(df_Video):
     while iRow < df_Video.shape[0]:
         newMSE = df_Video.loc[iRow]["MSE"] / max_MSE
         df_Video.at[iRow, "MSE"] = newMSE
-        if df_Video.loc[iRow]["MSE"] > cutoff_MSE:
+        if df_Video.loc[iRow]["MSE"] > cutoff_MSE or df_Video.loc[iRow]["MSE"]==0:
             scene_change_list.append(1)
         else:
             if iRow > 0:
@@ -182,31 +246,50 @@ def calculateSceneChanges(df_Video):
     df_Video["scene_change"] = scene_change_list
     return df_Video
 
-def makeDataframe(frameList, categorySelect, blockLateClips = True):
+def makeDataframe(frameList, categoryGroupings=None, blockLateClips = True, orignalTable=False):
+    if categoryGroupings is None:
+        categoryGroupings = [[["other"], ["cunnilingus"], ["titfuck"], ["blowjob_handjob"], ["sex_back", "sex_front"]],
+                         ["other", "cunnilingus", "titfuck", "blowjob_handjob", "sex"]]
+
     results_list = []
     for image in frameList:
-        results_list.append(image+[image[5]+image[6]])
+        newImage = image[0:2] + [x / sum(image[2:8]) for x in image[2:8]] +[image[5]+image[6]]
+        newImage = [round(x, 4) for x in newImage]
+        results_list.append(newImage)
 
     df = pd.DataFrame(results_list, columns=["MSE", "similarity_score", "blowjob_handjob", "cunnilingus", "other", "sex_back", "sex_front", "titfuck", "sex"])
     df = df.astype(float)
-    if "blowjob_handjob" in categorySelect:
-        df["other_nsfw"] = df["cunnilingus"] + df["titfuck"]
-    else:
-        df["other_nsfw"] = df["cunnilingus"] + df["titfuck"] + df["blowjob_handjob"]
-    df["category"] = df[categorySelect].idxmax(axis=1)
-    df["max_score"] = df[categorySelect].max(axis=1)
+
+    categoryGroup = categoryGroupings[1]
+    categoryInputs = categoryGroupings[0]
+    iCatGroup=0
+    while iCatGroup< len(categoryGroup):
+        catInputs = categoryInputs[iCatGroup]
+        df[categoryGroup[iCatGroup]] = df[catInputs].sum(axis=1)
+        # for input in categoryInputs[iCatGroup]:
+        #     df[categoryGroup]=df[categoryGroup]+df[input]
+        iCatGroup = iCatGroup + 1
+
+
+    # if "blowjob_handjob" in categorySelect:
+    #     df["other_nsfw"] = df["cunnilingus"] + df["titfuck"]
+    # else:
+    #     df["other_nsfw"] = df["cunnilingus"] + df["titfuck"] + df["blowjob_handjob"]
+    df["category"] = df[categoryGroup].idxmax(axis=1)
+    df["max_score"] = df[categoryGroup].max(axis=1)
     try:
         df = calculateSceneChanges(df)
     except:
         print(df)
         pass
-    df, SectionsDict, StartEndTimes = makeDataframeSections(df, categorySelect, blockLateClips)
+    df, SectionsDict, StartEndTimes = makeDataframeSections(df, categoryGroup, blockLateClips, orignalTable=orignalTable)
     return df, SectionsDict, StartEndTimes
 
 def makeVideoDict(frameList, picklePath, allVideoDict, videoName, dictKey, successfulLoad, updateBool):
     videoDict = dict()
     videoDict[dictKey] = frameList
     if successfulLoad and updateBool:
+        allVideoDict = loadClassifyPickleFile(picklePath)
         allVideoDict.update(videoDict)
         # print(picklePath)
         with open(picklePath, 'wb') as handle:
@@ -218,9 +301,9 @@ def makeVideoDict(frameList, picklePath, allVideoDict, videoName, dictKey, succe
             pickle.dump(videoDict, handle) #, protocol=pickle.HIGHEST_PROTOCOL)
     return videoDict
 
-def makePlots(df, plotBool, categorySelect=None, blockLateClips = True):
+def makePlots(df, plotBool, categorySelect=None, plotMainOnly=True):
     if categorySelect is None:
-        categorySelect = ["other", "other_nsfw", "sex", "finish"]
+        categorySelect = ["other", "cunnilingus", "titfuck", "blowjob_handjob", "sex"]
     if plotBool:
         # df, SectionsDict = makeDataframe(videoDict, categorySelect, blockLateClips)
         # df.set_index("Time (s)", inplace=True)
@@ -228,15 +311,15 @@ def makePlots(df, plotBool, categorySelect=None, blockLateClips = True):
 
         df2 = df.pivot(index="Time (s)", columns="category", values="max_score")
         df2 = df2.reindex(range(df2.index.max())).fillna(0)
-
         df2.plot(title="FrameList")
         plt.show()
-        df["similarity_score"].plot(title="similarity_score")
-        plt.show()
-        df["MSE"].plot(title="MSE")
-        plt.show()
-        df["scene_change"].plot(title="scene_change")
-        plt.show()
+        if plotMainOnly==False:
+            df["similarity_score"].plot(title="similarity_score")
+            plt.show()
+            df["MSE"].plot(title="MSE")
+            plt.show()
+            df["scene_change"].plot(title="scene_change")
+            plt.show()
 
 def makeImageFolder(inputVideo, imageFolder, reImage):
     if path.isdir(imageFolder) == False:
@@ -303,14 +386,16 @@ def getStartEndTrim(dfScore):
 
     return [firstChange, lastChange]
 
-def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
+def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips, orignalTable=False):
     if categorySelect is None:
-        categorySelect = ["other", "other_nsfw", "sex"]
+        categorySelect = ["other", "cunnilingus", "titfuck", "blowjob_handjob", "sex"]
 
+    origDataframeFrames = dataframeFrames[:]
     StartEndTimes = getStartEndTrim(dataframeFrames)
     startTime = StartEndTimes[0]
     endTime = StartEndTimes[1]
-    dataframeFrames = dataframeFrames.loc[startTime:endTime]
+    if orignalTable==False:
+        dataframeFrames = dataframeFrames.loc[startTime:endTime]
 
     dataframeFrames["section"] = dataframeFrames["scene_change"].cumsum()
     dataframeFrames['section_length'] = dataframeFrames.groupby(['section'])['scene_change'].transform('count')
@@ -341,8 +426,8 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
     for iSection in sections_n_list:
         df_section = dataframeFrames[dataframeFrames["section"] == iSection]
         if df_section["section"].mean() == dataframeFrames["section"].max() and df_section["category"].mode()[0] != categorySelect[0]:
-            if df_section.shape[0] > 10:
-                mindex = int(df_section.index.max() - 10)
+            if df_section.shape[0] > 60:
+                mindex = int(df_section.index.max() - 30)
                 maxdex = int(df_section.index.max())
                 df_section_new = df_section.loc[mindex:maxdex]
                 df_section_new["category"] = "finish"
@@ -352,14 +437,13 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
                 df_section_new["category"] = "finish"
                 SectionsDict["finish"].append([df_section_new["Time (s)"].min(), df_section_new["Time (s)"].max()])
             df_SectionsList.append(df_section_new)
-        elif df_section["Time (s)"].max() > dataframeFrames["Time (s)"].max() * 0.8 and (df_section["category"].mode()[0] != categorySelect[len(categorySelect)-1] or finishingBool) and (df_section[categorySelect[len(categorySelect)-1]+"_total"].mean()-df_section[categorySelect[len(categorySelect)-1]+"_N"].mean())<20:
-            if (df_section["category"].mode()[0] != categorySelect[0]): # or (df_section[categorySelect[0]+"_total"].mean()==df_section[categorySelect[0]+"_N"].mean()):
+        elif (df_section["Time (s)"].max() > dataframeFrames["Time (s)"].max() - 60 and (df_section["category"].mode()[0] != categorySelect[len(categorySelect)-1] or finishingBool) and (df_section[categorySelect[len(categorySelect)-1]+"_total"].mean()-df_section[categorySelect[len(categorySelect)-1]+"_N"].mean())<10) and (df_section["category"].mode()[0] != categorySelect[0]): # or (df_section[categorySelect[0]+"_total"].mean()==df_section[categorySelect[0]+"_N"].mean()):
                 df_section_new = df_section
                 df_section_new["category"] = "finish"
                 df_SectionsList.append(df_section_new)
                 SectionsDict["finish"].append([df_section_new["Time (s)"].min(), df_section_new["Time (s)"].max()])
                 finishingBool=True
-        else:
+        elif len(df_SectionsList)>0:
             if (df_section["category"].mode()[0] == categorySelect[len(categorySelect)-1] and df_section["Time (s)"].min() > dataframeFrames["Time (s)"].max() / 4) or df_section["Time (s)"].min() > dataframeFrames["Time (s)"].max() / 2 and blockLateClips:
                 stopNewCatFirst = True
             if df_section["category"].mode()[0] == categorySelect[0] and stopNewCatFirst:
@@ -367,6 +451,9 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
             else:
                 df_SectionsList.append(df_section)
                 SectionsDict[df_section["category"].mode()[0]].append([df_section["Time (s)"].min(), df_section["Time (s)"].max()])
+        else:
+            df_SectionsList.append(df_section)
+            SectionsDict[df_section["category"].mode()[0]].append([df_section["Time (s)"].min(), df_section["Time (s)"].max()])
 
     dataframeFrames = pd.concat(df_SectionsList)
 
@@ -376,12 +463,29 @@ def makeDataframeSections(dataframeFrames, categorySelect, blockLateClips):
         elif SectionsDict["finish"][-1][1]-SectionsDict["finish"][-1][0]>=3:
             SectionsDict["finish"][-1] = [SectionsDict["finish"][-1][0], SectionsDict["finish"][-1][1]-1]
 
+
+    if orignalTable:
+        dataframeFrames["index"] = dataframeFrames["Time (s)"]
+        dataframeFrames.set_index("index", inplace=True)
+        dataframeFrames = pd.concat([dataframeFrames, origDataframeFrames])
+        dataframeFrames = dataframeFrames[~dataframeFrames.index.duplicated(keep='first')]
+        dataframeFrames.sort_index(inplace=True)
+        dataframeFrames.reset_index(inplace=True)
+        dataframeFrames["Time (s)"] = dataframeFrames["index"]
+        dataframeFrames = dataframeFrames.drop(columns = ["index"])
+
+    dataframeFramesColumns = dataframeFrames.columns
+    removeCols = ["Time (s)"]
+    dataframeFramesColumns = [col for col in dataframeFramesColumns if col not in removeCols]
+    dataframeFrames["Time (hh:mm:ss)"] = pd.to_datetime(dataframeFrames["Time (s)"], unit='s').dt.strftime("%H:%M:%S") #.apply(pd.to_timedelta, unit='s')
+    dataframeFrames = dataframeFrames[["Time (s)", "Time (hh:mm:ss)"]+dataframeFramesColumns]
+
+
     return dataframeFrames, SectionsDict, StartEndTimes
 
+def folderToName(InputFilePath):
 
-def getDictKey(inputVideo, vidId="", df_Videos_All=pd.DataFrame()):
-
-    inputVideoName = os.path.basename(inputVideo)
+    inputVideoName = os.path.basename(InputFilePath)
 
     inputVid = inputVideoName.replace(r"’", r"'")
     inputVid = inputVid.replace("&nbsp", r" ")
@@ -389,8 +493,13 @@ def getDictKey(inputVideo, vidId="", df_Videos_All=pd.DataFrame()):
     inputVidIter = filter(lambda x: x in printable, inputVid)
     inputVid = "".join(inputVidIter)
 
-    dictKey = os.path.basename(inputVid)
     inputVideoName = inputVideoName.replace(".mp4", "")
+
+    return inputVideoName
+
+def getDictKey(inputVideoName, vidId="", df_Videos_All=pd.DataFrame()):
+    # inputVideoName = folderToName(inputVideo)
+    dictKey = os.path.basename(inputVideoName)
 
     if vidId != "":
         dictKey = dictKey + " - " + vidId
@@ -404,9 +513,18 @@ def getDictKey(inputVideo, vidId="", df_Videos_All=pd.DataFrame()):
 
     return dictKey
 
-def loadClassifyPickleFile(picklePath):
+def getChannel(inputVideoName, df_Videos_All=pd.DataFrame()):
+    channel = ""
+    if df_Videos_All.shape[0] > 0:
+        selected_df = df_Videos_All[df_Videos_All["Title"] == inputVideoName]
+        if selected_df.shape[0] > 0:
+            channel = selected_df["_Channel"].to_list()[0]
 
-    picklePath = picklePath + "/" + r"PickledVideos.pickle"
+    return channel
+
+def loadClassifyPickleFile(picklePath):
+    if "PickledVideos.pickle" not in picklePath:
+        picklePath = picklePath + "/" + r"PickledVideos.pickle"
 
     print(picklePath)
     iAttempt = 0
@@ -424,39 +542,49 @@ def loadClassifyPickleFile(picklePath):
 
     return allVideoDict
 
-def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath="", plotBool=False, reImage=False, df_Videos_All=pd.DataFrame(), autoClear=True):
+def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath="", plotBool=False, reImage=False, df_Videos_All=pd.DataFrame(), autoClear=True, categoryGroupings=None):
+    if categoryGroupings is None:
+        categoryGroupings = [[["other"], ["cunnilingus"], ["titfuck"], ["blowjob_handjob"], ["sex_back", "sex_front"]],
+                         ["other", "cunnilingus", "titfuck", "blowjob_handjob", "sex"]]
     inputVideoName = os.path.basename(inputVideo)
-    # print(inputVideoName)
-    # print(inputVideo)
-    inputVideoPath = inputVideo.replace(inputVideoName, "")
-    categorySelect = ["other", "other_nsfw", "sex"]
+
+    inputVideoName = folderToName(inputVideoName)
+    channel = getChannel(inputVideoName, df_Videos_All)
+    dictKey = getDictKey(inputVideoName, vidId, df_Videos_All)
 
     if modelStoragePath == "":
-        imageFolder = "Frames/" + inputVideoName.replace(".mp4", "").replace(".", "")
+        imageFolder = "Frames/" + dictKey
         picklePath =  r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Classify_Model/PickledVideos.pickle"
     else:
-        imageFolder = modelStoragePath + "/" + "Frames/" + inputVideoName.replace(".mp4", "").replace(".", "")
+        imageFolder = modelStoragePath + "/" + "Frames/" + dictKey
         picklePath = modelStoragePath + "/" + r"PickledVideos.pickle"
 
     imageFolder = imageFolder.replace(r"’", r"'")
     imageFolder = imageFolder.replace("&nbsp", r" ")
+    imageFolder = imageFolder.strip()
     printable = set(string.printable)
     imageFolderIter = filter(lambda x: x in printable, imageFolder)
     imageFolder = "".join(imageFolderIter)
-
-    dictKey = getDictKey(imageFolder, vidId, df_Videos_All)
+    imageDirExcFrames = imageFolder.replace("Frames/", "")
+    if all(ch == " " for ch in imageDirExcFrames):
+        imageFolder = "Frames/unknownName" + str(time.time()).replace(".", "")
 
     successfulLoad = True
+    findSizes=False
+    if channel == "Blacked Raw" or channel == "Tushy Raw" or channel == "Deeper" or channel == "Banana Fever":
+        findSizes=True
 
     if successfulLoad:
-        if dictKey in allVideoDict:
+        if dictKey in allVideoDict and reImage==False:
+            print("Loaded: ", dictKey)
             frameList = allVideoDict[dictKey]
             # makeImageFolder(inputVideo, imageFolder, reImage)
             # frameList = processImages(imageFolder, modelStoragePath)
             videoDict = makeVideoDict(frameList, picklePath, allVideoDict, inputVideoName, dictKey, successfulLoad, updateBool=False)
         else:
+            print("New: ", dictKey)
             makeImageFolder(inputVideo, imageFolder, reImage)
-            frameList = processImages(imageFolder, modelStoragePath)
+            frameList = processImages(imageFolder, modelStoragePath, findSizes=findSizes)
             videoDict = makeVideoDict(frameList, picklePath, allVideoDict, inputVideoName, dictKey, successfulLoad, updateBool=True)
     else:
         print("Error in pickled dictionary - Aborting")
@@ -465,8 +593,8 @@ def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath=""
 
     print("File loaded")
     outputDict = dict()
-    dataframeFrames, sectionDict, startEndTimes = makeDataframe(videoDict[dictKey], categorySelect)
-    makePlots(dataframeFrames, plotBool, categorySelect)
+    dataframeFrames, sectionDict, startEndTimes = makeDataframe(videoDict[dictKey], categoryGroupings)
+    makePlots(dataframeFrames, plotBool, categoryGroupings[1])
     outputDict["Sections"] = sectionDict
     # outputDict["Sections"] = makeSections(dataframeFrames, blockLateClips=True)
     outputDict["StartEndTimes"] = startEndTimes
@@ -477,39 +605,5 @@ def getVidClassifiedData(inputVideo, allVideoDict, vidId="", modelStoragePath=""
         except:
             pass
 
-
-    # videoDict["Sections"] = makeSections(videoDict[dictKey], blockLateClips=True)
-
     return outputDict
-
-
-# picklePath = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Classify_Model\PickledVideos.pickle"
-# with open(picklePath, 'rb') as handle:
-#     allVideoDict = pickle.load(handle)
-#
-# print("Ahhhh")
-
-# inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\Blacked\BLACKED Tori Black Has Intense BBC Sex With Her Bodyguard.mp4"
-# # inputVideo = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\RandomVideosShe Is Nerdy89\She Is Nerdy - Monroe Fox - princess anal adventure.mp4"
-# # # inputVideo2 = r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\TempVids\RandomVideosSpy Fam53\SPYFAM Sex Addict Step Dad Spies On Slutty Step Daughter.mp4"
-# # # inputVideo3 = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\Casting\Very beautiful woman enjoys her first casting fuck.mp4"
-# # # inputVideo4 = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\Blacked\BLACKED Dani Daniels and Anikka Interracial Threesome.mp4"
-# # # inputVideo5 = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\ASMR\Quirky teen playing with boobs ASMR bra fetish.mp4"
-# # # inputVideo6 = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\RandomVideosyinyleon7\Kinky real amateur couple fuck in garage, I had to fuck her ass too!!.mp4"
-# # # fileDir = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\Vixen"
-# # # fileDir = r"C:\Users\vince\Pictures\Python\PMV_Generator_Git\Resources\TempVids\Tushy"
-# # # fileList = os.listdir(fileDir)
-#
-#
-# df_Videos_All = pd.read_csv(r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Resources\DataLists\combinedPornDir.csv")
-# allVideoDict = loadClassifyPickleFile(r"E:\Python Main\PycharmProjects\PMV_Generator_Git\Classify_Model/")
-# # iFile = 0
-# # fileList = [inputVideo]
-# # while iFile < len(fileList):
-# #     file = fileList[iFile]
-# file = inputVideo# fileDir + "/" + file
-# vidDict = getVidClassifiedData(file, allVideoDict, plotBool=True, df_Videos_All=df_Videos_All, reImage=False)
-# print(vidDict["Sections"])
-# iFile = iFile + 1
-
 

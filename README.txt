@@ -5,6 +5,8 @@ Required to install:
 	https://imagemagick.org/index.php
 Recommended to install:
 	https://nordvpn.com/
+Download classified video list here:
+	https://mega.nz/file/PjAjnYLb#tiTKSPSRIHw-nXba8bJNTy4rknqZ_Z73K_fufuiI3To
 
 Join the subreddit here:
 	https://www.reddit.com/r/AutoPMVs/
@@ -20,7 +22,9 @@ Version numbers, drive letters and paths may vary slightly.
 Once this is done restart the pc to register the changes.
 
 Once the restart is complete, download the program from the git repositry and open in pycharm.
-Now, go to Terminal (in pycharm) and type pip install -r requirements.txt
+Setup a virtual environment in that project folder.
+Now, double click the PMV_Generator_Prod\install_requirements.bat file to install python packages
+	OR go to Terminal (in pycharm) and type pip install -r requirements.txt
 In Resources/Datalists/PathListReduced change the 2 fields coloured red to your own paths:
 	AudioSegmentPath - Where you installed ffmpeg
 	pythonPath - Where you installed python (or your virtual environment for this project)
@@ -79,7 +83,7 @@ nSplits - How many sections to split the music into for calculating "switch poin
 SD for clip switch - How many standard deviations above the mean difference does a change in audio have to be to trigger a "switch point"
 Min clip length - "What is the minimum length of audio needed between each "switch point"
 Randomise - Randomise the order in which videos apppear or keep it in a constant order.
-Resize - Resize videos of different aspect ratios to the same size (Shoiuld be kept on)
+Resize - Resize videos of different aspect ratios to the same size (Should be kept on)
 Flip vids - Mirror the vids so that watermarks appear backwards (good option for coinfusing take down algos if you decide not to crop the vids)
 ClassifyModel - Run an image classifier to determine sections of the video and scene changes.
 UserName - Input your username for file name making and intro videos.
@@ -91,4 +95,15 @@ It then checks whether a scene has changed between the two frames.
 This information is then passed to the generator so that all normal, foreplay and sex scenes appear together and that you don't have a scene or camera change in the middle of a clip in your pmv.
 It gives the final pmv a much more refeined and professional feel.
 Once a video is classified, the information is stored in a pickle file so you won't have to do it again and it'll be quicker next time.
-There are already some (>2500) info for classified videos stored with the program.
+There are already some (>2500) info for classified videos stored with the program. But you can download more from the megalink above.
+If you have some videos from a previous update that you'd like to keep classified then move your old file to:
+	PMV_Generator_Prod\Classify_Model\PickledVideos\
+	Then, when next in the UI, click File->Merge Data or File->Merge Classfied Videos List
+Likewise for your saved videos or music list but the old csvs in PMV_Generator_Prod\Resources\DataLists\PornLists\ and PMV_Generator_Prod\Resources\DataLists\MusicLists\ respectively.
+	Then, when next in the UI, click File->Merge Data
+
+You can also optimise how much of each classified act you want with the sliders on the RHS
+	These only adjust to the percentage you would have had otherwise based off the amount in the scenes
+	If you set anything to zero, thta type of act is removed from the scene
+	If you choose to have original video sound, you cna also choose to delay it until a certain act (can cut out music from intros from getting in your PMV)
+

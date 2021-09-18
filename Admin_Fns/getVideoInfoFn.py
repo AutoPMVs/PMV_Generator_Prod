@@ -17,6 +17,7 @@ from Admin_Fns.csvFunctions import remove_PS_Cats
 from Admin_Fns.csvFunctions import getProxyChannel
 from Admin_Fns.csvFunctions import getWebsite
 from Admin_Fns.allPaths import PathList
+import math as m
 # cookies = PathList["cookiePath"]
 
 def groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width,
@@ -24,6 +25,12 @@ def groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, 
                        includeGroupedCats=[], excludeGroupedCats=[], knownCatList=[], proxyChannels=[], channelTimings_df=[], groupChannelTimings_df=[],
                        startList=[], endList=[], iURL=0, nCat=40, nPornstar=5,  customPornstar=[], excludeTags=[], minDuration=0, knownChannel="", errorMessage=""):
     knownCategories = knownCatList
+
+
+    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'Cum', 'Anal', 'Milf', 'Wife', 'Bedroom', 'Big ass', 'Cuckold',
+                        'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0', 'Bbc', 'Jordan']
+    for remPS in removePS_strings:
+        pornstarList = [x for x in pornstarList if x != remPS]
     # else:
     #     knownCategories = []
 
@@ -50,11 +57,6 @@ def groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, 
 
     psList = sortedLists[1]
     psList = title_to_pornstar(pornstarList, psList, title, uploader)
-
-    removePS_strings = ['Sex', 'Bo', 'Pornstar', 'Cum', 'Anal', 'Milf', 'Wife', 'Bedroom', 'Big ass', 'Cuckold',
-                        'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0']
-    for remPS in removePS_strings:
-        psList = [x for x in psList if x != remPS]
     psList = psList + customPornstar
     psList2 = pornstar_sorting(psList, nPornstar)
     catList = remove_PS_Cats(psList, catList)
@@ -305,6 +307,7 @@ def getInfoDict(line):
     if line == "":
         iAttempt = 7
     info_dict = dict()
+    print("Getting Video Info")
     while iAttempt <= 6:
         print(iAttempt)
         if iAttempt <3:
@@ -313,7 +316,7 @@ def getInfoDict(line):
                     info_dict = ydl.extract_info(line, download=False)
                 break
             except Exception as e:
-                print(str(e))
+                # print(str(e))
                 if "PornHub said:" in str(e) or "HTTP Error 410: Gone" in str(e) or "ERROR: Unable to extract encoded url" in str(e):
                     errorMessage=str(e)
                     info_dict=dict()
@@ -329,7 +332,7 @@ def getInfoDict(line):
                             'simulate': True,
                             'dump_single_json': True,
                             'writeinfojson': True}
-                print("Error retrying - Attempt: ", iAttempt)
+                # print("Error retrying - Attempt: ", iAttempt)
                 with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                     info_dict = ydl.extract_info(line, download=False)
                 break
@@ -338,7 +341,7 @@ def getInfoDict(line):
                 if "PornHub said:" in str(e) or "HTTP Error 410: Gone" in str(e) or "ERROR: Unable to extract encoded url" in str(e):
                     errorMessage=str(e)
                     info_dict=dict()
-                    print("Error - Video Removed")
+                    # print("Error - Video Removed")
                     break
                 elif "ERROR: requested format not available" == str(e):
                     iAttempt = 5
@@ -350,12 +353,12 @@ def getInfoDict(line):
                             'simulate': True,
                             'dump_single_json': True,
                             'writeinfojson': True}
-                print("Error retrying - Attempt: ", iAttempt)
+                # print("Error retrying - Attempt: ", iAttempt)
                 with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                     info_dict = ydl.extract_info(line, download=False)
                 break
             except Exception as e:
-                print(str(e))
+                # print(str(e))
                 errorMessage=str(e)
                 info_dict=dict()
                 pass
@@ -382,6 +385,8 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
         #             time.sleep(10)
         #             pass
         #         iAttempt = iAttempt + 1
+        urls = [url.split("?pl=")[0] for url in urls]
+
 
         urls = [url for url in urls if url not in knownURLs_List]
         urls = [url for url in urls if url != ""]
@@ -418,7 +423,7 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
 
         title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width = getValsFromDict(info_dict)
 
-        if 'youporn' not in url and len(errorMessage)==0:
+        if 'youporn' not in url and 'videos.trendyporn.com' not in url and len(errorMessage)==0:
             line, categories, uploader, foundPornstars = getMoreCatandChannel(url, categories, uploader, foundPornstars, pornstarList)
         print(url)
         print(categories + tags)
@@ -428,6 +433,12 @@ def getVidInfoFn(urls, startTimeMain, endTimeMain, titles=[], startList=[], endL
             knownChan = knownChannel[iURL][:]
         except:
             knownChan=knownChannel
+
+        try:
+            if m.isnan(knownChan[iURL]):
+                knownChan = uploader
+        except:
+            pass
 
         if title not in knownTitles_List:
             videoList = groupAndSortInputs(title, id, url, tags, categories, uploader, upload_date, duration, view_count, like_count, dislike_count, ext, fps, height, width,
@@ -496,7 +507,7 @@ def getMoreCatandChannel(url, categories, uploader, pornstars, pornstarList):
                 categories.append(str(link.contents[0]))
             if '<a class="btn btn-default label profile" href="/pornstars/' in str(link):
                 newPornstars.append(str(link.contents[0].contents[0]))
-            if '<a class="btn btn-default label main uploader-tag" href="/' in str(link):
+            if '<a class="btn btn-default label main uploader-tag' in str(link):
                 uploader = str(link.contents[0].contents[0])
         elif 'pervclips.com' in url:
             if '<a class="link" href="https://www.pervclips.com/tube/tags/' in str(link):
@@ -679,7 +690,7 @@ def exportUpdatedFile(df_videos, fileOut):
     for col in dfVideoListOut.columns:
         if "Pornstar" in col:
             removePS_strings = ['Sex', 'Bo', 'Pornstar', 'Cum', 'Anal', 'Milf', 'Wife', 'Bedroom', 'Big ass', 'Cuckold',
-                                'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0']
+                                'Sharing', 'Big tits', 'Cheating', 'Watching', 'Housewife', 'nan', '0', 'Bbc', 'Jordan']
             for remPS in removePS_strings:
                 dfVideoListOut[col] = dfVideoListOut[col].replace(remPS, '')
         elif "Unnamed" in col:
