@@ -6,7 +6,7 @@ Required to install:
 Recommended to install:
 	https://nordvpn.com/
 Download classified video list here:
-	https://mega.nz/file/PjAjnYLb#tiTKSPSRIHw-nXba8bJNTy4rknqZ_Z73K_fufuiI3To
+	https://mega.nz/file/jyBzUADR#zh00XpTJDYTUx8h8_B2dSo19_8ltDh_g0xJvugbVEVM
 
 Join the subreddit here:
 	https://www.reddit.com/r/AutoPMVs/
